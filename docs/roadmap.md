@@ -25,10 +25,11 @@
 - Four audit rounds of P0/P1/P2 fixes with regression tests (see
   `docs/codebase/CONCERNS.md`); CI with 4 green jobs (frontend, backend,
   Python engine, smoke).
-- Brand icon integration: square tile-emblem derivative under
-  `public/branding/` wired into the app header badge, empty-state badge,
-  favicon, and `apple-touch-icon`; UI iconography standardized on
-  `lucide-react` (ADR-010).
+- Brand icon integration: authoritative **animated vector SVG logo**
+  (`references/branding/ytdl-flow-logo.svg`, ADR-011) with a tile-only
+  derivative under `public/branding/` wired into the app header badge,
+  empty-state badge, favicon, and `apple-touch-icon`; UI iconography
+  standardized on `lucide-react` (ADR-010).
 - Planning/execution of `plans/001`–`plans/006` (CI frontend tests,
   non-destructive smoke tests, URL-regex parity, release archive excludes,
   ESLint, WS reconnect reconciliation).
@@ -61,6 +62,8 @@ All items below are documented, evidence-based gaps from
 - One automatic retry on transient `NetworkError: getaddrinfo` in the engine
   probe (observed once in live testing; UI Retry already covers it manually).
 - CI status badge in README.
+- Raster (PNG) favicon/touch-icon exports generated from the SVG at build
+  time, for browsers that lack SVG favicon support (see `docs/branding.md`).
 - Broader UX polish surfaced by future audits.
 
 ## Maintenance rules

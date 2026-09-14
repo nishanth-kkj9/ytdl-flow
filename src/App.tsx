@@ -69,7 +69,7 @@ function App() {
               <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-3.5">
                 <div className="flex items-center gap-3.5">
                   <div className="badge-play" aria-hidden="true">
-                    <img src="/branding/ytdl-flow-icon.png" alt="" width={22} height={22} />
+                    <img src="/branding/ytdl-flow-icon.svg" alt="" width={22} height={22} />
                   </div>
                   <div>
                     <h1 className="text-base font-semibold tracking-tight text-text">

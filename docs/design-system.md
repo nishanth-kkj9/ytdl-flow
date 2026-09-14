@@ -76,8 +76,9 @@ separate brand layer and is **not** part of these UI tokens.
   enforced in `src/hooks/useEngineEvents.ts`.
 - Icons: standardized on `lucide-react` (ADR-010) at the established small
   sizes (`h-3.5 w-3.5` / `h-4 w-4`); brand emblem slots use the
-  `public/branding/ytdl-flow-icon.png` derivative, never a hand-drawn SVG
-  lookalike (see `docs/branding.md`). The logo is never reconstructed as SVG.
+  `public/branding/ytdl-flow-icon.svg` tile derivative of the authoritative
+  vector logo, never a hand-drawn lookalike (see `docs/branding.md`). The
+  logo is never redrawn inline.
 
 ## Adding/changing tokens
 

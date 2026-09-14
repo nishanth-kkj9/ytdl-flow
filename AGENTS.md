@@ -33,30 +33,32 @@ Before making changes:
 
 ## BRANDING RULE
 
-The authoritative YTDL Flow logo is stored at:
+The authoritative YTDL Flow logo is the supplied vector source:
 
 ```
-references/branding/ytdl-flow-logo.png
+references/branding/ytdl-flow-logo.svg
 ```
 
-The supplied original raster image is the source of truth. It is a **PNG raster
-image, not an SVG source**.
+It is an **animated SVG** (violet app tile with a chrome play button, a
+rose-gold music note, and the silver "YTDL FLOW" wordmark; honors
+`prefers-reduced-motion`). The supplied original is the source of truth.
 
 NEVER:
 
 - redesign the logo
-- recreate the logo as SVG
+- recreate the logo as inline code or a hand-drawn lookalike
 - replace it with a generic icon
 - invent another logo
-- change the logo geometry or proportions
-- change the logo colors
+- change the logo geometry, proportions, or colors
 - substitute an icon-library logo
 - generate a replacement logo unless explicitly instructed
 
-If a production asset is needed (e.g. a square icon for small UI slots), it must
-be a **separate derivative** placed under `public/branding/` — never a
-modification of the original reference file. Create derivatives only when
-technically necessary. See `docs/branding.md` for full usage policy.
+If a production asset is needed (e.g. the tile-only emblem for the favicon or
+small UI slots), it must be a **separate derivative** placed under
+`public/branding/` (currently `ytdl-flow-icon.svg`) — never a modification of
+the original reference file. Derivatives must reuse the original's geometry,
+gradients, and animations exactly. Create derivatives only when technically
+necessary. See `docs/branding.md` for the full usage policy.
 
 ---
 

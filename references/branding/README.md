@@ -10,25 +10,27 @@
 
 | File | Role |
 |------|------|
-| `ytdl-flow-logo.png` | **The authoritative YTDL Flow logo** (original raster, PNG, 1024×1036, RGBA). See `docs/branding.md` for documented characteristics and usage rules. |
+| `ytdl-flow-logo.svg` | **The authoritative YTDL Flow logo** — animated vector SVG (1024×1024: violet app tile, chrome play button, rose-gold music note, silver "YTDL FLOW" wordmark). See `docs/branding.md` for documented characteristics and usage rules. |
 
 ## What does NOT belong here
 
-- Derivatives, crops, exports, or app production assets — those belong under
+- Derivatives, crops, or app production assets — those belong under
   `public/branding/` (created only when technically necessary).
 - UI screenshots or mockups (those belong in `references/ui/`).
 - Anything that is not original reference material.
 
 ## How coding agents must use this material
 
-1. Treat `ytdl-flow-logo.png` as **immutable** — never edit, re-export, convert,
-   or replace it.
-2. Never recreate the logo as SVG or generate a substitute.
+1. Treat `ytdl-flow-logo.svg` as **immutable** — never edit, re-export,
+   minify, or replace it.
+2. Never redraw the logo inline or generate a substitute; small-UI needs are
+   met by the documented derivative under `public/branding/`.
 3. Before any branding-related change, read `docs/branding.md` and inspect the
-   reference image itself.
-4. Reference the canonical path (`references/branding/ytdl-flow-logo.png`) in
+   reference file itself.
+4. Reference the canonical path (`references/branding/ytdl-flow-logo.svg`) in
    documentation; do not duplicate the file elsewhere.
 
-**Integrity:** SHA-256
-`811EE563171707EDBF47DF81A744B795A0175A8AADC22F6837B9D68E9139ADE5`
-(1,388,070 bytes). If a local copy's hash differs, it is not the original.
+Historical note: an earlier raster original (`ytdl-flow-logo.png`, SHA-256
+`811EE563…ADE5`) was the reference until 2026-09-14, when the owner supplied
+this vector logo and the raster assets were removed (see `docs/decisions.md`
+ADR-011).

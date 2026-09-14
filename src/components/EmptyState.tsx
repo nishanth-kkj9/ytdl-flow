@@ -2,7 +2,7 @@ export function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border-strong bg-surface/30 px-6 py-8 text-center">
       <div className="badge-play mb-4" aria-hidden="true">
-        <img src="/branding/ytdl-flow-icon.png" alt="" width={18} height={18} />
+        <img src="/branding/ytdl-flow-icon.svg" alt="" width={18} height={18} />
       </div>
       <h2 className="text-base font-semibold tracking-tight text-text">Paste a YouTube link to get started</h2>
       <p className="mt-1.5 max-w-md text-sm text-text-muted">

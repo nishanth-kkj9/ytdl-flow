@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  width="1024"
+  height="1024"
+  role="img"
+  aria-labelledby="logoTitle logoDesc"
+>
+  <title id="logoTitle">YTDL FLOW</title>
+  <desc id="logoDesc">
+    A polished violet app icon containing a chrome play button and a
+    rose-gold music note, above the silver YTDL FLOW wordmark.
+  </desc>
+
+  <defs>
+    <style>
+      /* =====================================================
+         ANIMATIONS
+      ====================================================== */
+      .bloom {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: bloomPulse 8s ease-in-out infinite;
+      }
+      @keyframes bloomPulse {
+        0%, 100% { opacity: .70; transform: scale(.97); }
+        50%      { opacity: 1;   transform: scale(1.03); }
+      }
+
+      .float {
+        animation: floatY 7s ease-in-out infinite;
+      }
+      @keyframes floatY {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-8px); }
+      }
+
+      .contactShadow {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: shadowPulse 7s ease-in-out infinite;
+      }
+      @keyframes shadowPulse {
+        0%, 100% { opacity: .55; transform: scale(1); }
+        50%      { opacity: .36; transform: scale(.93); }
+      }
+
+      .symbols {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: symbolPulse 7s ease-in-out infinite;
+      }
+      @keyframes symbolPulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.016); }
+      }
+
+      .note {
+        transform-box: fill-box;
+        transform-origin: 50% 62%;
+        animation: noteBob 5s ease-in-out infinite;
+      }
+      @keyframes noteBob {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50%      { transform: translateY(-6px) rotate(-1.6deg); }
+      }
+
+      .sheen {
+        animation: sheenSweep 6.5s cubic-bezier(.45, .05, .25, 1) infinite;
+      }
+      /* FIX: 1120px left a ~6px sliver of the skewed band inside the
+         clip corner during the hold phase (needs >= 1125.8px). */
+      @keyframes sheenSweep {
+        0%        { transform: translateX(0); }
+        55%, 100% { transform: translateX(1200px); }
+      }
+
+      .textShine {
+        animation: textShine 6.5s cubic-bezier(.45, .05, .25, 1) infinite;
+      }
+      @keyframes textShine {
+        0%        { transform: translateX(0); }
+        55%, 100% { transform: translateX(1240px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .bloom,
+        .float,
+        .contactShadow,
+        .symbols,
+        .note,
+        .sheen,
+        .textShine {
+          animation: none !important;
+        }
+      }
+    </style>
+
+    <!-- BACKGROUND -->
+    <radialGradient id="background" cx="50%" cy="42%" r="72%">
+      <stop offset="0%"   stop-color="#566375"/>
+      <stop offset="18%"  stop-color="#414d5e"/>
+      <stop offset="42%"  stop-color="#293544"/>
+      <stop offset="67%"  stop-color="#151f2d"/>
+      <stop offset="100%" stop-color="#070d16"/>
+    </radialGradient>
+
+    <radialGradient id="backgroundLight" cx="50%" cy="45%" r="55%">
+      <stop offset="0%"   stop-color="#9ba6b5" stop-opacity=".20"/>
+      <stop offset="38%"  stop-color="#798496" stop-opacity=".09"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <pattern id="grain" width="8" height="8" patternUnits="userSpaceOnUse">
+      <path d="M0 1H8M0 5H8" stroke="#ffffff" stroke-width=".35" opacity=".025"/>
+    </pattern>
+
+    <!-- ICON -->
+    <linearGradient id="iconOuter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#9a78bd"/>
+      <stop offset="18%"  stop-color="#69448d"/>
+      <stop offset="52%"  stop-color="#351b53"/>
+      <stop offset="100%" stop-color="#160b24"/>
+    </linearGradient>
+
+    <linearGradient id="iconFace" x1="10%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%"   stop-color="#72539a"/>
+      <stop offset="19%"  stop-color="#5c3b82"/>
+      <stop offset="47%"  stop-color="#3b205c"/>
+      <stop offset="77%"  stop-color="#24113b"/>
+      <stop offset="100%" stop-color="#160a25"/>
+    </linearGradient>
+
+    <linearGradient id="iconSheen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".18"/>
+      <stop offset="30%"  stop-color="#ffffff" stop-opacity=".04"/>
+      <stop offset="60%"  stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity=".18"/>
+    </linearGradient>
+
+    <radialGradient id="iconBottomGlow" cx="50%" cy="100%" r="70%">
+      <stop offset="0%"   stop-color="#8c38c7" stop-opacity=".30"/>
+      <stop offset="55%"  stop-color="#52217d" stop-opacity=".10"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- PLAY -->
+    <linearGradient id="playMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#f1e4ff"/>
+      <stop offset="18%"  stop-color="#d6b8f0"/>
+      <stop offset="42%"  stop-color="#a982ca"/>
+      <stop offset="66%"  stop-color="#7953a0"/>
+      <stop offset="100%" stop-color="#4c2b70"/>
+    </linearGradient>
+
+    <linearGradient id="playHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".65"/>
+      <stop offset="45%"  stop-color="#ffffff" stop-opacity=".08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity=".45"/>
+    </linearGradient>
+
+    <linearGradient id="playInner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#22112f"/>
+      <stop offset="60%"  stop-color="#160b24"/>
+      <stop offset="100%" stop-color="#0c0614"/>
+    </linearGradient>
+
+    <!-- NOTE -->
+    <linearGradient id="noteMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffd1d4"/>
+      <stop offset="20%"  stop-color="#f5a8ad"/>
+      <stop offset="44%"  stop-color="#d76e7c"/>
+      <stop offset="72%"  stop-color="#a84156"/>
+      <stop offset="100%" stop-color="#712238"/>
+    </linearGradient>
+
+    <linearGradient id="noteHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".50"/>
+      <stop offset="35%"  stop-color="#ffffff" stop-opacity=".08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity=".20"/>
+    </linearGradient>
+
+    <!-- WORDMARK -->
+    <linearGradient id="silverText" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="20%"  stop-color="#f7f8fa"/>
+      <stop offset="48%"  stop-color="#dde2e8"/>
+      <stop offset="72%"  stop-color="#b6bec8"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+
+    <linearGradient id="textReflection" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".50"/>
+      <stop offset="50%"  stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="shineGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.44" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.50" stop-color="#ffffff" stop-opacity=".85"/>
+      <stop offset="0.56" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="sheenGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.38" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.50" stop-color="#ffffff" stop-opacity=".70"/>
+      <stop offset="0.62" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- FILTERS -->
+    <filter id="iconShadow" x="-40%" y="-40%" width="180%" height="200%">
+      <feDropShadow dx="0" dy="19" stdDeviation="18" flood-color="#000000" flood-opacity=".82"/>
+    </filter>
+
+    <filter id="symbolShadow" x="-35%" y="-35%" width="170%" height="190%">
+      <feDropShadow dx="5" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity=".78"/>
+    </filter>
+
+    <filter id="textShadow" x="-25%" y="-50%" width="150%" height="200%">
+      <feDropShadow dx="0" dy="7" stdDeviation="5" flood-color="#000000" flood-opacity=".90"/>
+    </filter>
+
+    <filter id="softBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+
+    <!-- FIX: new blur for very flat ellipses, whose 200%-tall region
+         would clip the Gaussian tails (needs ~ ±3 sigma = ±54px). -->
+    <filter id="softBlurFlat" x="-75%" y="-250%" width="250%" height="600%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+
+    <!-- CLIP & MASK -->
+    <clipPath id="iconClip">
+      <rect x="341" y="273" width="342" height="342" rx="77"/>
+    </clipPath>
+
+    <mask
+      id="textMask"
+      maskUnits="userSpaceOnUse"
+      x="0" y="640" width="1024" height="150"
+    >
+      <text
+        x="512" y="756"
+        text-anchor="middle"
+        font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"
+        font-size="91"
+        font-weight="900"
+        letter-spacing="1.5"
+        fill="#ffffff"
+      >YTDL FLOW</text>
+    </mask>
+  </defs>
+
+  <!-- BACKGROUND -->
+  <rect width="1024" height="1024" fill="url(#background)"/>
+  <ellipse class="bloom" cx="512" cy="430" rx="430" ry="390"
+           fill="url(#backgroundLight)" filter="url(#softBlur)"/>
+  <rect width="1024" height="1024" fill="url(#grain)"/>
+
+  <!-- CONTACT SHADOW (FIX: flat-safe blur region) -->
+  <ellipse class="contactShadow" cx="512" cy="633" rx="205" ry="48"
+           fill="#000000" opacity=".55" filter="url(#softBlurFlat)"/>
+
+  <!-- FLOATING ICON GROUP -->
+  <g class="float">
+
+    <!-- ICON BASE -->
+    <g filter="url(#iconShadow)">
+      <rect x="337" y="269" width="350" height="350" rx="80" fill="url(#iconOuter)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77" fill="url(#iconFace)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77" fill="url(#iconSheen)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77" fill="url(#iconBottomGlow)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77"
+            fill="none" stroke="#d7c3e9" stroke-opacity=".42" stroke-width="2"/>
+      <!-- FIX: round caps so the inner shadow ends fade softly -->
+      <path d="M 362 570 C 390 595 426 606 462 608 L 578 608
+               C 625 604 655 584 671 558"
+            fill="none" stroke="#16081f" stroke-opacity=".50" stroke-width="3"
+            stroke-linecap="round"/>
+    </g>
+
+    <!-- GLASS SHEEN (before symbols, as intended) -->
+    <g clip-path="url(#iconClip)">
+      <g class="sheen" opacity=".40">
+        <rect x="-300" y="140" width="150" height="620"
+              fill="url(#sheenGrad)" transform="skewX(-18)"/>
+      </g>
+    </g>
+
+    <!-- CENTER SYMBOLS -->
+    <g class="symbols">
+      <!-- FIX: fit transform. Cluster was 386.5 x 290.5 (incl. strokes),
+           centred (486.75, 421.25); face is 342 x 342 centred (512, 444).
+           scale(.8) -> margins 16.4px sides / 54.8px top-bottom.
+           Kept on a static wrapper OUTSIDE the filtered group so the CSS
+           animation on .symbols cannot override it. -->
+      <g transform="translate(122.6 107) scale(.8)">
+        <g filter="url(#symbolShadow)">
+          <!-- Play triangle -->
+          <g class="play">
+            <path d="M 448 280 L 676 405 L 448 530 Z"
+                  fill="url(#playMetal)" stroke="#171025" stroke-width="8"
+                  stroke-linejoin="round"/>
+            <!-- FIX: true 20px inset (was 18 / 18.5 / 22.1), edges parallel -->
+            <path d="M 468 314 L 634 405 L 468 496 Z" fill="url(#playInner)"/>
+            <!-- FIX: parallel to outer edges, uniform ~7px inset -->
+            <path d="M 455 292 L 661 405 L 455 518"
+                  fill="none" stroke="url(#playHighlight)" stroke-width="4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+
+          <!-- Music note -->
+          <g class="note">
+            <!-- FIX: rebuilt path — heads now identical (120 x 91),
+                 both stems 23px, beam edges parallel (21px constant),
+                 junctions still pinned to the stem edges,
+                 redundant collinear nodes removed -->
+            <path d="M 416 405
+                     L 416 518
+                     C 416 543 389 564 356 564
+                     C 323 564 296 543 296 518
+                     C 296 493 323 473 356 473
+                     C 369 473 381 476 393 482
+                     L 393 410
+                     C 393 397 403 388 416 384
+                     L 521 348
+                     C 532 344 541 352 541 364
+                     L 541 505
+                     C 538 533 512 554 480 554
+                     C 448 554 421 535 421 509
+                     C 421 483 448 463 480 463
+                     C 496 463 508 466 518 472
+                     L 518 370
+                     L 416 405 Z"
+                  fill="url(#noteMetal)" stroke="#401527" stroke-width="5"
+                  stroke-linejoin="round"/>
+            <!-- FIX: glint strip now sits fully inside the beam
+                 (3.4px below top edge, 2.6px above bottom edge) -->
+            <path d="M 420 386 L 516 353 L 516 368 L 420 401 Z"
+                  fill="url(#noteHighlight)" opacity=".75"/>
+            <!-- FIX: glints upright (heads are upright), glint 1 tracks
+                 the resized head -->
+            <ellipse cx="337" cy="502" rx="38" ry="17"
+                     fill="#ffffff" opacity=".17"/>
+            <ellipse cx="471" cy="495" rx="34" ry="15"
+                     fill="#ffffff" opacity=".14"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <!-- WORDMARK -->
+  <g filter="url(#textShadow)">
+    <text x="512" y="756" text-anchor="middle"
+          font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"
+          font-size="91" font-weight="900" letter-spacing="1.5"
+          fill="url(#silverText)">YTDL FLOW</text>
+    <text x="512" y="753" text-anchor="middle"
+          font-family="Montserrat, Inter, 'Segoe UI', Arial, sans-serif"
+          font-size="91" font-weight="900" letter-spacing="1.5"
+          fill="url(#textReflection)" opacity=".20">YTDL FLOW</text>
+  </g>
+
+  <!-- MOVING GLINT OVER WORDMARK -->
+  <g mask="url(#textMask)">
+    <rect class="textShine" x="-360" y="640" width="360" height="150"
+          fill="url(#shineGrad)"/>
+  </g>
+
+  <!-- FLOOR REFLECTION (FIX: flat-safe blur region) -->
+  <ellipse cx="512" cy="791" rx="300" ry="22"
+           fill="#8c98a9" opacity=".08" filter="url(#softBlurFlat)"/>
+</svg>

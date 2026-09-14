@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="references/branding/ytdl-flow-logo.png" alt="YTDL Flow logo" width="340" />
+<img src="references/branding/ytdl-flow-logo.svg" alt="YTDL Flow logo" width="340" />
 
 # YTDL Flow
 
@@ -583,7 +583,7 @@ humans and coding agents alike:
 | [docs/decisions.md](docs/decisions.md) | ADR-style decision log (nine verifiable decisions) |
 | [docs/codebase/](docs/codebase) | Deep technical reference: architecture, stack, structure, conventions, testing, integrations, concerns |
 | [plans/](plans/README.md) | Numbered implementation plans (001–006) with execution records |
-| [references/branding/](references/branding/README.md) | **The authoritative YTDL Flow logo** (original raster, hash-pinned) |
+| [references/branding/](references/branding/README.md) | **The authoritative YTDL Flow logo** (vector SVG, source of truth) |
 
 ---
 

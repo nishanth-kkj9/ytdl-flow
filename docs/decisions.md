@@ -204,6 +204,9 @@ Small-size uses (favicon, header badge) stayed on an inline placeholder until
 the derivative was actually needed — see ADR-010 for the sanctioned creation
 and `docs/branding.md` for the production-asset provenance.
 
+> **Superseded (2026-09-14):** ADR-011 replaced the raster original with the
+> owner-supplied vector logo; this decision is retained for history.
+
 ---
 
 ## ADR-010 — Brand icon derivative + lucide-react icon set
@@ -235,4 +238,57 @@ One new runtime dependency (frontend-only, tree-shaken); the derivative must
 be regenerated from the original if the reference ever changes; docs
 (`docs/branding.md`, `docs/design-system.md`, `docs/roadmap.md`) updated in
 the same change.
+
+### Follow-up (2026-09-13): icon generation v2
+The original derivative was a tight opaque crop (0–3px margins, tile bleeding
+to the canvas edge). Regenerated the master with:
+- **Clear space** — tile optically centered with padding on all sides.
+- **Transparent corners** — alpha follows a squircle-like rounded-rect
+  silhouette of the tile; corners are 0-alpha instead of opaque dark slate.
+- **Hole-free emblem** — the alpha covers the full tile (purple fill +
+  metallic rim + play/music glyphs; internal shadow gaps are inside the
+  shape, not holes).
+- Added `public/branding/ytdl-flow-favicon.png` (64×64, ~7 KB) for the
+  browser-tab `rel="icon"`; `apple-touch-icon` keeps the 512 master.
+Colors/geometry of the emblem are preserved exactly (validated: only framing
+and alpha changed; same tile center pixel). The original reference file was
+not modified.
+
+---
+
+## ADR-011 — Logo replaced by the owner-supplied animated vector SVG
+
+### Context
+The brand reference was a raster PNG (ADR-009/ADR-010). The product owner then
+supplied a new, animated vector logo (violet app tile + chrome play button +
+rose-gold note + silver wordmark) and instructed that **all raster logos be
+removed** and this SVG become the single brand asset. Per the REFERENCE
+HIERARCHY, an explicit user instruction is the highest-priority source.
+
+### Decision
+- Store the supplied SVG verbatim at `references/branding/ytdl-flow-logo.svg`
+  as the authoritative, immutable reference.
+- Remove all raster logo assets: `references/branding/ytdl-flow-logo.png`,
+  `public/branding/ytdl-flow-icon.png`, `public/branding/ytdl-flow-favicon.png`.
+- Add one derivative, `public/branding/ytdl-flow-icon.svg` (tile-only crop,
+  transparent background, gradients/filters/animations reused verbatim), and
+  wire it into the favicon, `apple-touch-icon`, app header badge, and
+  empty-state badge (`index.html`, `src/App.tsx`,
+  `src/components/EmptyState.tsx`).
+- Update the binding rules in `AGENTS.md` and `docs/branding.md`: the logo is
+  now vector, so "never recreate as SVG" becomes "never redraw inline / no
+  hand-drawn lookalikes"; the derivative policy (under `public/branding/`,
+  only when technically necessary) is unchanged.
+
+### Reason
+The owner explicitly replaced the reference asset (highest-priority source).
+A vector source scales losslessly to every UI size and removes ~1.7 MB of
+raster payload from the repository and the shipped bundle.
+
+### Consequences
+Supersedes ADR-009 (raster-original rule) and the PNG production assets of
+ADR-010. SVG favicons are not supported by some legacy browsers, and
+Safari/iOS touch-icon support is limited; if parity is ever required,
+generate raster exports from the SVG at build time (tracked in
+`docs/roadmap.md` Ideas).
 

@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="270 200 504 504"
+  width="504"
+  height="504"
+  role="img"
+  aria-labelledby="iconTitle iconDesc"
+>
+  <title id="iconTitle">YTDL Flow</title>
+  <desc id="iconDesc">
+    The YTDL Flow app tile: a violet rounded square containing a chrome play
+    button and a rose-gold music note (tile emblem of the official logo).
+  </desc>
+
+  <defs>
+    <style>
+      .float {
+        animation: floatY 7s ease-in-out infinite;
+      }
+      @keyframes floatY {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-8px); }
+      }
+
+      .symbols {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: symbolPulse 7s ease-in-out infinite;
+      }
+      @keyframes symbolPulse {
+        0%, 100% { transform: scale(1); }
+        50%      { transform: scale(1.016); }
+      }
+
+      .note {
+        transform-box: fill-box;
+        transform-origin: 50% 62%;
+        animation: noteBob 5s ease-in-out infinite;
+      }
+      @keyframes noteBob {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50%      { transform: translateY(-6px) rotate(-1.6deg); }
+      }
+
+      .sheen {
+        animation: sheenSweep 6.5s cubic-bezier(.45, .05, .25, 1) infinite;
+      }
+      @keyframes sheenSweep {
+        0%        { transform: translateX(0); }
+        55%, 100% { transform: translateX(1200px); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .float,
+        .symbols,
+        .note,
+        .sheen {
+          animation: none !important;
+        }
+      }
+    </style>
+
+    <linearGradient id="iconOuter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#9a78bd"/>
+      <stop offset="18%"  stop-color="#69448d"/>
+      <stop offset="52%"  stop-color="#351b53"/>
+      <stop offset="100%" stop-color="#160b24"/>
+    </linearGradient>
+
+    <linearGradient id="iconFace" x1="10%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%"   stop-color="#72539a"/>
+      <stop offset="19%"  stop-color="#5c3b82"/>
+      <stop offset="47%"  stop-color="#3b205c"/>
+      <stop offset="77%"  stop-color="#24113b"/>
+      <stop offset="100%" stop-color="#160a25"/>
+    </linearGradient>
+
+    <linearGradient id="iconSheen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".18"/>
+      <stop offset="30%"  stop-color="#ffffff" stop-opacity=".04"/>
+      <stop offset="60%"  stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity=".18"/>
+    </linearGradient>
+
+    <radialGradient id="iconBottomGlow" cx="50%" cy="100%" r="70%">
+      <stop offset="0%"   stop-color="#8c38c7" stop-opacity=".30"/>
+      <stop offset="55%"  stop-color="#52217d" stop-opacity=".10"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="playMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#f1e4ff"/>
+      <stop offset="18%"  stop-color="#d6b8f0"/>
+      <stop offset="42%"  stop-color="#a982ca"/>
+      <stop offset="66%"  stop-color="#7953a0"/>
+      <stop offset="100%" stop-color="#4c2b70"/>
+    </linearGradient>
+
+    <linearGradient id="playHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".65"/>
+      <stop offset="45%"  stop-color="#ffffff" stop-opacity=".08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity=".45"/>
+    </linearGradient>
+
+    <linearGradient id="playInner" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#22112f"/>
+      <stop offset="60%"  stop-color="#160b24"/>
+      <stop offset="100%" stop-color="#0c0614"/>
+    </linearGradient>
+
+    <linearGradient id="noteMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#ffd1d4"/>
+      <stop offset="20%"  stop-color="#f5a8ad"/>
+      <stop offset="44%"  stop-color="#d76e7c"/>
+      <stop offset="72%"  stop-color="#a84156"/>
+      <stop offset="100%" stop-color="#712238"/>
+    </linearGradient>
+
+    <linearGradient id="noteHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity=".50"/>
+      <stop offset="35%"  stop-color="#ffffff" stop-opacity=".08"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity=".20"/>
+    </linearGradient>
+
+    <linearGradient id="sheenGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.38" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.50" stop-color="#ffffff" stop-opacity=".70"/>
+      <stop offset="0.62" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="iconShadow" x="-40%" y="-40%" width="180%" height="200%">
+      <feDropShadow dx="0" dy="19" stdDeviation="18" flood-color="#000000" flood-opacity=".82"/>
+    </filter>
+
+    <filter id="symbolShadow" x="-35%" y="-35%" width="170%" height="190%">
+      <feDropShadow dx="5" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity=".78"/>
+    </filter>
+
+    <clipPath id="iconClip">
+      <rect x="341" y="273" width="342" height="342" rx="77"/>
+    </clipPath>
+  </defs>
+
+  <!-- FLOATING ICON GROUP (verbatim from the authoritative logo) -->
+  <g class="float">
+    <g filter="url(#iconShadow)">
+      <rect x="337" y="269" width="350" height="350" rx="80" fill="url(#iconOuter)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77" fill="url(#iconFace)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77" fill="url(#iconSheen)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77" fill="url(#iconBottomGlow)"/>
+      <rect x="341" y="273" width="342" height="342" rx="77"
+            fill="none" stroke="#d7c3e9" stroke-opacity=".42" stroke-width="2"/>
+      <path d="M 362 570 C 390 595 426 606 462 608 L 578 608
+               C 625 604 655 584 671 558"
+            fill="none" stroke="#16081f" stroke-opacity=".50" stroke-width="3"
+            stroke-linecap="round"/>
+    </g>
+
+    <g clip-path="url(#iconClip)">
+      <g class="sheen" opacity=".40">
+        <rect x="-300" y="140" width="150" height="620"
+              fill="url(#sheenGrad)" transform="skewX(-18)"/>
+      </g>
+    </g>
+
+    <g class="symbols">
+      <g transform="translate(122.6 107) scale(.8)">
+        <g filter="url(#symbolShadow)">
+          <g class="play">
+            <path d="M 448 280 L 676 405 L 448 530 Z"
+                  fill="url(#playMetal)" stroke="#171025" stroke-width="8"
+                  stroke-linejoin="round"/>
+            <path d="M 468 314 L 634 405 L 468 496 Z" fill="url(#playInner)"/>
+            <path d="M 455 292 L 661 405 L 455 518"
+                  fill="none" stroke="url(#playHighlight)" stroke-width="4"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+
+          <g class="note">
+            <path d="M 416 405
+                     L 416 518
+                     C 416 543 389 564 356 564
+                     C 323 564 296 543 296 518
+                     C 296 493 323 473 356 473
+                     C 369 473 381 476 393 482
+                     L 393 410
+                     C 393 397 403 388 416 384
+                     L 521 348
+                     C 532 344 541 352 541 364
+                     L 541 505
+                     C 538 533 512 554 480 554
+                     C 448 554 421 535 421 509
+                     C 421 483 448 463 480 463
+                     C 496 463 508 466 518 472
+                     L 518 370
+                     L 416 405 Z"
+                  fill="url(#noteMetal)" stroke="#401527" stroke-width="5"
+                  stroke-linejoin="round"/>
+            <path d="M 420 386 L 516 353 L 516 368 L 420 401 Z"
+                  fill="url(#noteHighlight)" opacity=".75"/>
+            <ellipse cx="337" cy="502" rx="38" ry="17"
+                     fill="#ffffff" opacity=".17"/>
+            <ellipse cx="471" cy="495" rx="34" ry="15"
+                     fill="#ffffff" opacity=".14"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
