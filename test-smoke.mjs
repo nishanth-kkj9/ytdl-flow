@@ -59,6 +59,33 @@ async function run() {
   assert.strictEqual(rebindStatus, 421, "Evil Host header should return 421");
   console.log("✓ Host header validation OK");
 
+  // 4c. Security headers (N-10/N-14): the CSP must contain only sources a
+  //     browser will actually accept. Chrome silently DROPS an invalid
+  //     host-source (`ws://[::1]:*`) and logs "It will be ignored", so
+  //     IPv6-loopback WebSockets stayed blocked while the header looked
+  //     correct — assert the valid form instead of trusting the string.
+  const pageRes = await fetch(`${base}/`);
+  const csp = pageRes.headers.get("content-security-policy");
+  assert.ok(csp, "Content-Security-Policy header must be present");
+  const connectSrc = csp
+    .split(";")
+    .map((directive) => directive.trim())
+    .find((directive) => directive.startsWith("connect-src"));
+  assert.ok(connectSrc, "CSP must define connect-src");
+  for (const source of connectSrc.split(/\s+/).slice(1)) {
+    assert.ok(
+      !source.includes("["),
+      `CSP host-sources cannot contain bracketed IPv6 literals (Chrome ignores them): ${source}`
+    );
+  }
+  for (const required of ["'self'", "ws://127.0.0.1:*", "ws://localhost:*", "wss://localhost:*"]) {
+    assert.ok(
+      connectSrc.includes(required),
+      `connect-src must allow the loopback origin ${required}`
+    );
+  }
+  console.log("✓ CSP connect-src sources are valid");
+
   // 5. History clear (DELETE) — DESTRUCTIVE: wipes the SERVER's history file.
   //    P2-38: the old guard checked the SMOKE PROCESS's own YTDL_DATA_DIR,
   //    but safety depends on the SERVER's env — running this test with the

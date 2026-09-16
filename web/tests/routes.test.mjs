@@ -198,6 +198,45 @@ function request(app, method, path, body) {
   console.log("✓ download: finite duration forwarded");
 }
 
+// Test 8d (N-08): a half-open trim window must be rejected. The engine only
+// applies a trim when BOTH bounds are present
+// (engine.py: `if self.trim_start is not None and self.trim_end is not None`),
+// so accepting a lone bound returned a full-length file with no error at any
+// layer — the request claimed a trim that never happened.
+{
+  const engine = makeEngine();
+  const app = makeApp(downloadRouter(engine));
+  const res = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    mode: "audio",
+    format: "mp3",
+    quality: "high",
+    trim_start: 10,
+  });
+  assert.strictEqual(res.status, 400, "trim_start without trim_end should be 400");
+  assert.strictEqual(engine.sent.length, 0, "No command should be sent for a partial trim window");
+  console.log("✓ download: trim_start without trim_end -> 400");
+}
+
+// Test 8e (N-08): a complete trim window is still accepted and forwarded.
+{
+  const engine = makeEngine();
+  const app = makeApp(downloadRouter(engine));
+  const res = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    mode: "audio",
+    format: "mp3",
+    quality: "high",
+    trim_start: 10,
+    trim_end: 20,
+  });
+  assert.strictEqual(res.status, 200, "Complete trim window should be accepted");
+  assert.strictEqual(engine.sent.length, 1, "One command should be sent");
+  assert.strictEqual(engine.sent[0].trim_start, 10, "trim_start must be forwarded");
+  assert.strictEqual(engine.sent[0].trim_end, 20, "trim_end must be forwarded");
+  console.log("✓ download: complete trim window forwarded");
+}
+
 // Test 9: cancel with missing id -> 400
 {
   const engine = makeEngine();

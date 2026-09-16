@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { AlertTriangle, CheckCircle2, MinusCircle, XCircle } from "lucide-react";
 import { useDownloadStore } from "../stores/downloadStore";
 import type { MetadataResult } from "../types";
 
@@ -165,8 +166,13 @@ export function MetadataPanel() {
 
       <div className="border-t border-border px-5 py-4">
         <div className="mb-3 flex items-center justify-between">
-          <span className="text-sm font-semibold text-text">
-            {allVerified ? "✔" : "⚠"} Verification
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-text">
+            {allVerified ? (
+              <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-accent-audio" aria-hidden="true" />
+            )}
+            Verification
           </span>
           <span className={`text-xs tabular-nums font-medium ${
             allVerified ? "text-success" : "text-accent-audio"
@@ -177,9 +183,13 @@ export function MetadataPanel() {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5">
           {checklist.map((item) => {
-            const icon =
-              item.state === "pass" ? "✔" :
-              item.state === "fail" ? "✖" : "○";
+            // ADR-010: lucide icons, matching the toasts/header — the text
+            // glyphs used before were inconsistent with the rest of the app
+            // and, being aria-hidden, silently hid the pass state from
+            // screen readers.
+            const Icon =
+              item.state === "pass" ? CheckCircle2 :
+              item.state === "fail" ? XCircle : MinusCircle;
             const iconClass =
               item.state === "pass" ? "text-success" :
               item.state === "fail" ? "text-error" : "text-text-muted/60";
@@ -191,11 +201,10 @@ export function MetadataPanel() {
                 key={item.key}
                 className="flex items-center gap-1.5 text-xs"
               >
-                <span className={iconClass} aria-hidden="true">
-                  {icon}
-                </span>
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} aria-hidden="true" />
                 <span className={labelClass}>
                   {item.label}
+                  {item.state === "pass" && <span className="sr-only"> verified</span>}
                   {item.state === "fail" && (
                     <span className="ml-1 text-error">(Failed)</span>
                   )}

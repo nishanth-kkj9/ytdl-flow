@@ -69,6 +69,17 @@ export function downloadRouter(engineManager) {
       if (trimStart != null && trimEnd != null && trimEnd <= trimStart) {
         return res.status(400).json({ error: "trim_end must be greater than trim_start" });
       }
+      // N-08: the engine applies a trim ONLY when BOTH bounds are present
+      // (engine.py: `if self.trim_start is not None and self.trim_end is not None`).
+      // A lone bound used to pass this validation and then be silently dropped
+      // by the engine — the user asked for a trim, got the full file, and no
+      // layer reported a problem. Reject the half-open window instead of
+      // accepting work that cannot be honored.
+      if ((trimStart != null) !== (trimEnd != null)) {
+        return res.status(400).json({
+          error: "trim_start and trim_end must be provided together",
+        });
+      }
     }
 
     const outputDir = config.downloadsDir;

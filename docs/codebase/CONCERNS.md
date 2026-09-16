@@ -142,7 +142,9 @@ suites passed while real behavior didn't — see N-01/N-02).
 4. **N-05 (MED) CSP blocked the IPv6 loopback the server accepts** — `allowedHostsFor`
    and the (tested) ws-origin check admit `[::1]`, but the new `connect-src` didn't,
    so browsers on `http://[::1]:3000` silently lost the WS. **FIXED**: added
-   `ws://[::1]:* wss://[::1]:*`.
+   `ws://[::1]:* wss://[::1]:*` — **later found ineffective**: bracketed IPv6 literals
+   are invalid CSP host-sources and the browser silently ignored them (see N-14). IPv6
+   loopback works because `'self'` covers the same-origin WebSocket.
 
 ### Still open (assessed, not fixed)
 - **N-04 (LOW-MED, scope refined)**: `restoreActiveJobs()` runs once at mount. The
@@ -159,14 +161,41 @@ suites passed while real behavior didn't — see N-01/N-02).
   verification silently downgrades to extension-trust there.
 - **N-07 (LOW)**: the F-03 result guard covers only `cancelled`; a late result can
   still flip `completed`→`failed` or vice versa (no known engine path emits that).
-- **N-08 (LOW)**: `trim_start` without `trim_end` passes validation but is silently
-  ignored by the engine (it requires both) — could 400 instead.
+- **N-08 (LOW) — FIXED**: `trim_start` without `trim_end` passed route validation but was
+  silently ignored by the engine (it applies a trim only when both bounds are present,
+  `engine.py`). The download route now rejects a half-open window with 400
+  (`trim_start and trim_end must be provided together`) instead of accepting work that
+  cannot be honored — pinned by routes tests 8d/8e.
+- **N-12 (UI, FIXED)**: `ProbeCard`'s format list placed 6 cells into a 4-track grid on
+  mobile, so the codec/size text landed in implicit auto-sized columns outside the row
+  width, and the columns were unlabeled. Both row types now share one column order
+  (ID · Ext · Quality · Info · Codec · Size) with a desktop-only legend; the two
+  secondary cells are `hidden sm:block` so mobile renders exactly four columns.
+- **N-13 (UI, FIXED)**: `MetadataPanel` still rendered text glyphs (✔/✖/○) while the rest
+  of the app standardized on `lucide-react` (ADR-010), and the pass state was
+  `aria-hidden` (invisible to screen readers). Now `CheckCircle2`/`XCircle`/`MinusCircle`
+  with an sr-only "verified" label. `EmptyState`'s format legend is also `flex-wrap` so it
+  no longer overflows on narrow screens.
+- **N-14 (MED, FIXED)**: the CSP `connect-src` added for N-05 contained
+  `ws://[::1]:*` / `wss://[::1]:*`, which are **invalid CSP host-sources** — Chrome
+  logs "contains an invalid source … It will be ignored" and DROPS them, so the entry
+  never had any effect and every page load emitted 2 console errors (the port-less
+  `ws://[::1]` spelling is rejected too — verified live 2026-09-16). The invalid
+  sources are removed; the IPv6-loopback case needs no source of its own because
+  `'self'` matches the same-origin WebSocket. Verified live on both
+  `http://127.0.0.1:3211` and `http://[::1]:3212`: 0 console errors and the app
+  reaches "Engine ready" over the WS on both. Pinned by the smoke test's CSP
+  assertion (see N-10).
+- **N-11 (LOW, still open)**: server-persisted history records lack `thumbnail` — the
+  engine's `result` payload carries only `thumbnail_ok`, not the URL, so
+  `historyPersistence` cannot populate it without an engine protocol change. Client-saved
+  records (tab open at completion) still carry it via merge-by-id.
 - **N-09 (LOW)**: client watchdog (60 s) can fire before the engine's probe deadline
   resolves; a late `probe_result` then replaces the timeout error (self-healing).
-- **N-10 (LOW)**: no automated test asserts the CSP header value (verified live
-  twice); a server-level header test would close that gap.
-- **N-11 (cosmetic)**: server-persisted history records lack `thumbnail` (the
-  client-saved ones carry it) — drawer rows show no art for those.
+- **N-10 (LOW) — FIXED**: no automated test asserted the CSP header value. The smoke
+  test (CI `smoke` job) now asserts the header is present, that `connect-src` carries no
+  bracketed IPv6 literal, and that the loopback ws sources are present — the N-14 class
+  of bug can no longer ship silently.
 
 ## Runtime notes
 - Downloads → `downloads/` (gitignored); history → `web/data/history.json` (gitignored,

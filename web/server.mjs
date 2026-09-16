@@ -57,7 +57,16 @@ async function main() {
         // allowedHostsFor() includes [::1], and the ws-origin check (tested)
         // admits IPv6 loopback, so the CSP has to admit it too or the browser
         // silently blocks a socket the backend considers legitimate.
-        "connect-src 'self' ws://127.0.0.1:* ws://localhost:* ws://[::1]:* wss://localhost:* wss://[::1]:*",
+        // N-14: bracketed IPv6 literals are NOT accepted in CSP host-sources.
+        // Chrome reports "contains an invalid source: 'ws://[::1]:*'. It will
+        // be ignored." and DROPS the entry on every page load — so the source
+        // added for N-05 never did anything, and the port-less spelling
+        // (`ws://[::1]`) is rejected just the same (verified live 2026-09-16).
+        // Verified live in the same session: the app served from
+        // http://[::1]:3212 still reaches "Engine ready" over its WebSocket
+        // with only `'self'` covering it — same-origin ws/wss is matched by
+        // 'self', so the IPv6 loopback case needs no source of its own.
+        "connect-src 'self' ws://127.0.0.1:* ws://localhost:* wss://localhost:*",
         "media-src 'self'",
         "object-src 'none'",
         "base-uri 'self'",
