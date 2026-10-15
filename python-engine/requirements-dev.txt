@@ -4,4 +4,4 @@
 # Install: pip install -r python-engine/requirements-dev.txt
 # Requires Python >= 3.9 (the engine uses `dict[str, Any]` PEP 585 syntax).
 -r requirements.txt
-pytest>=8.0,<9.0
+pytest>=9.1.1,<10.0
