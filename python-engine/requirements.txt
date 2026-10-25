@@ -1,4 +1,4 @@
 # Python engine runtime dependencies.
 # Pinned ranges keep builds reproducible while allowing patch updates.
-yt-dlp>=2026.8.19,<2027.0.0
+yt-dlp>=2026.10.21,<2027.0.0
 mutagen>=1.48.1,<2.0.0
