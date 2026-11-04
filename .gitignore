@@ -62,6 +62,9 @@ server.pid
 coverage/
 .ruff_cache
 
+# Rust build artifacts
+/test_reqwest/target/
+
 # release.yml builds the publish archive here (P3: was never ignored,
 # so a local release build polluted git status)
 release/
