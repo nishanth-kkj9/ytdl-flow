@@ -33,10 +33,90 @@ sys.stdout = sys.stderr
 from engine import AudioDownloadEngine, DownloadResult, classify_error_type, _MUTAGEN_OK, _YDL_OK  # noqa: E402
 
 
+# ── Bot-check circuit breaker ────────────────────────────────────────────────
+# When YouTube flags this IP, every further probe/download fails fast AND
+# hardens the block. This breaker trips after consecutive BotDetectionErrors
+# and short-circuits new work with the actionable hint for a cooldown window
+# instead of spending yt-dlp extractions that only make it worse. Resets on
+# any success. Thread-safe: 2 probe + 5 download threads share it.
+_BOT_BREAKER_LOCK = threading.Lock()
+_BOT_BREAKER_FAILURES = 0
+_BOT_BREAKER_OPEN_UNTIL = 0.0
+_BOT_BREAKER_THRESHOLD = 3
+_BOT_BREAKER_COOLDOWN_S = 300.0  # 5 minutes
+_BOT_BREAKER_LAST_ERROR = ""
+
+
+def _bot_breaker_check() -> str | None:
+    """Return the cooldown error message if the breaker is open, else None."""
+    import time as _time
+
+    with _BOT_BREAKER_LOCK:
+        if _BOT_BREAKER_OPEN_UNTIL and _time.monotonic() < _BOT_BREAKER_OPEN_UNTIL:
+            remaining = int(_BOT_BREAKER_OPEN_UNTIL - _time.monotonic())
+            return (
+                f"YouTube bot-check is active on this IP (cooling down, "
+                f"~{remaining}s left). {_bot_hint_text()}"
+            )
+        return None
+
+
+def _bot_hint_text() -> str:
+    try:
+        from engine import bot_fix_hint as _hint
+
+        return _hint()
+    except Exception:
+        return "Set YTDL_COOKIES_FILE and retry after a few minutes."
+
+
+def _bot_breaker_success() -> None:
+    global _BOT_BREAKER_FAILURES, _BOT_BREAKER_OPEN_UNTIL, _BOT_BREAKER_LAST_ERROR
+    with _BOT_BREAKER_LOCK:
+        _BOT_BREAKER_FAILURES = 0
+        _BOT_BREAKER_OPEN_UNTIL = 0.0
+        _BOT_BREAKER_LAST_ERROR = ""
+
+
+def _bot_breaker_failure(error: str) -> None:
+    global _BOT_BREAKER_FAILURES, _BOT_BREAKER_OPEN_UNTIL, _BOT_BREAKER_LAST_ERROR
+    import time as _time
+
+    with _BOT_BREAKER_LOCK:
+        _BOT_BREAKER_FAILURES += 1
+        _BOT_BREAKER_LAST_ERROR = error[:300]
+        if _BOT_BREAKER_FAILURES >= _BOT_BREAKER_THRESHOLD:
+            _BOT_BREAKER_OPEN_UNTIL = _time.monotonic() + _BOT_BREAKER_COOLDOWN_S
+
+
+def _bot_breaker_status() -> dict[str, Any]:
+    import time as _time
+
+    with _BOT_BREAKER_LOCK:
+        open_ = bool(
+            _BOT_BREAKER_OPEN_UNTIL and _time.monotonic() < _BOT_BREAKER_OPEN_UNTIL
+        )
+        return {
+            "open": open_,
+            "consecutive_failures": _BOT_BREAKER_FAILURES,
+            "cooldown_seconds": max(
+                0, int(_BOT_BREAKER_OPEN_UNTIL - _time.monotonic())
+            )
+            if open_
+            else 0,
+        }
+
+
 def _emit_ready() -> None:
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
     deno = shutil.which("deno")
+    try:
+        from engine import AudioDownloadEngine as _Eng
+
+        cookies = _Eng.cookie_status()
+    except Exception:
+        cookies = {"configured": False, "source": "none"}
     _write_message({
         "type": "engine_ready",
         # IPC protocol version — bumped on any incompatible NDJSON change so a
@@ -47,6 +127,9 @@ def _emit_ready() -> None:
         "deno": bool(deno),
         "yt_dlp": _YDL_OK,
         "mutagen": _MUTAGEN_OK,
+        # Cookie-auth observability (source only, never contents): the UI can
+        # warn "no YouTube auth configured" before the first bot-check lands.
+        "cookies": cookies,
     })
 
 _DOWNLOAD_JOBS: dict[str, dict[str, Any]] = {}
@@ -125,10 +208,17 @@ def _write_result(id_: str, result: DownloadResult) -> None:
 
 
 def _probe(url: str, id_: str) -> None:
+    # Circuit breaker: skip the yt-dlp extraction entirely while cooling
+    # down — each attempt would fail AND harden YouTube's IP block.
+    blocked = _bot_breaker_check()
+    if blocked is not None:
+        _write_error(id_, "BotDetectionError", blocked)
+        return
     try:
         engine = AudioDownloadEngine()
         info, error = engine.probe(url)
         if info is not None:
+            _bot_breaker_success()
             _write_message({
                 "type": "probe_result",
                 "id": id_,
@@ -144,6 +234,10 @@ def _probe(url: str, id_: str) -> None:
             elif not error:
                 error = "Probe returned no info; verify network, yt-dlp, and URL compatibility."
             error_type = classify_error_type(error)
+            if error_type == "BotDetectionError":
+                _bot_breaker_failure(error)
+            # NOTE: engine.probe() already appends bot_fix_hint() for
+            # BotDetectionError — do not append again here (no double hint).
             _write_error(id_, error_type, error)
     except Exception as exc:
         _write_error(id_, "ProbeError", f"{type(exc).__name__}: {exc}")
@@ -187,8 +281,11 @@ def _run_download(id_: str, url: str, audio_format: str, quality: str, output_di
         result = engine.download(url, retry_cb=retry_cb)
 
         if result.success:
+            _bot_breaker_success()
             _write_result(id_, result)
         else:
+            if (result.error_type or "") == "BotDetectionError":
+                _bot_breaker_failure(result.error or "")
             _write_error(id_, result.error_type or "DownloadError", result.error or "Download failed")
     except Exception as exc:
         _write_error(id_, "DownloadError", str(exc) or "Download exception")
@@ -251,6 +348,15 @@ def _start_download(command: dict[str, Any]) -> None:
 
     if not id_ or not url:
         _write_error(id_, "InvalidCommand", "download command requires 'id' and 'url'")
+        return
+
+    # Circuit breaker: reject at the gate while cooling down so a queued burst
+    # of 5 downloads doesn't each burn a yt-dlp extraction against a flagged
+    # IP (the block deepens with every attempt). No job is registered, so the
+    # UI row resolves immediately with the actionable cooldown message.
+    blocked = _bot_breaker_check()
+    if blocked is not None:
+        _write_error(id_ or "", "BotDetectionError", blocked)
         return
 
     # Register the job synchronously under the lock, BEFORE submitting to the
@@ -361,6 +467,9 @@ def _handle_command(command: dict[str, Any]) -> None:
             # still waiting for a worker slot. The Node layer can surface the
             # real queue depth instead of assuming every job starts at once.
             "queued": sum(1 for j in jobs if j["status"] == "queued"),
+            # Bot-check observability: lets /api/status surface the cooldown
+            # and cookie-auth state without a dedicated round-trip.
+            "bot_breaker": _bot_breaker_status(),
         })
     else:
         _write_error(str(command.get("id", "")), "UnknownCommand", f"Unsupported cmd: {cmd}")

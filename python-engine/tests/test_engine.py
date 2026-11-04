@@ -104,6 +104,166 @@ def test_merge_missing_info_none_fallback_is_noop():
 
 # ── Audio format selection (single-download regression) ───────────────────────
 
+def test_bot_fix_pacing_and_no_forced_client():
+    """Bot-check fix must pace requests and keep the default client merge."""
+    AudioDownloadEngine._reset_cookies_cache()
+    try:
+        engine = AudioDownloadEngine(audio_format="mp3", quality="high", mode="audio")
+        try:
+            opts = engine._build_opts()
+        except RuntimeError:
+            return
+        # Extraction pacing must exist (this is the phase that got throttled
+        # after ~20 rapid lookups). Correct key is sleep_interval_requests —
+        # sleep_interval alone only paces the download phase (verified against
+        # yt-dlp 2026.08.19 YoutubeDL docstring).
+        assert opts.get("sleep_interval_requests", 0) >= 1
+        assert "player_client" not in opts.get("extractor_args", {})
+    finally:
+        AudioDownloadEngine._reset_cookies_cache()
+
+
+def test_bot_fix_cookie_file_env(tmp_path):
+    """YTDL_COOKIES_FILE must map to yt-dlp's cookiefile opt."""
+    import os
+    jar = tmp_path / "cookies.txt"
+    jar.write_text("# Netscape HTTP Cookie File\n")
+    AudioDownloadEngine._reset_cookies_cache()
+    old = os.environ.get("YTDL_COOKIES_FILE")
+    os.environ["YTDL_COOKIES_FILE"] = str(jar)
+    try:
+        assert AudioDownloadEngine._find_cookies() == {"cookiefile": str(jar)}
+    finally:
+        if old is None:
+            os.environ.pop("YTDL_COOKIES_FILE", None)
+        else:
+            os.environ["YTDL_COOKIES_FILE"] = old
+        AudioDownloadEngine._reset_cookies_cache()
+
+
+def test_bot_fix_cookie_cache_tracks_env_change(tmp_path):
+    """Stale cookie cache must not survive an env change (no restart trap)."""
+    import os
+    jar = tmp_path / "cookies.txt"
+    jar.write_text("# Netscape HTTP Cookie File\n")
+    AudioDownloadEngine._reset_cookies_cache()
+    old = os.environ.get("YTDL_COOKIES_FILE")
+    os.environ.pop("YTDL_COOKIES_FILE", None)
+    try:
+        assert AudioDownloadEngine._find_cookies() == {}
+        os.environ["YTDL_COOKIES_FILE"] = str(jar)
+        assert AudioDownloadEngine._find_cookies() == {"cookiefile": str(jar)}
+    finally:
+        if old is None:
+            os.environ.pop("YTDL_COOKIES_FILE", None)
+        else:
+            os.environ["YTDL_COOKIES_FILE"] = old
+        AudioDownloadEngine._reset_cookies_cache()
+
+
+def test_bot_fix_hint_mentions_cookies():
+    """The bot-check hint must tell the user about cookie auth."""
+    from engine import bot_fix_hint
+    hint = bot_fix_hint()
+    assert "YTDL_COOKIES_FILE" in hint
+
+
+def test_bot_classifier_true_bot_signals():
+    """Genuine bot-check messages must fail fast (not burn retries)."""
+    from engine import is_bot_detection_error
+    assert is_bot_detection_error(
+        "ERROR: [youtube] abc: Sign in to confirm you're not a bot."
+    )
+    assert is_bot_detection_error("HTTP Error 429: Too Many Requests")
+
+
+def test_bot_classifier_no_false_positives():
+    """Age-gates and transient blips must NOT fail fast (keep retries)."""
+    from engine import is_bot_detection_error
+    # Age verification is a per-video gate, not an IP bot-check.
+    assert not is_bot_detection_error("Sign in to confirm your age")
+    # Transient networking blips keep the exponential-backoff path.
+    assert not is_bot_detection_error("temporary network blip")
+    assert not is_bot_detection_error("rate limited, retrying")
+
+
+def test_bot_fix_invalid_browser_warns_and_skips():
+    """An unsupported YTDL_COOKIES_BROWSER must not reach yt-dlp."""
+    import os
+    AudioDownloadEngine._reset_cookies_cache()
+    old = os.environ.get("YTDL_COOKIES_BROWSER")
+    os.environ.pop("YTDL_COOKIES_FILE", None)
+    os.environ["YTDL_COOKIES_BROWSER"] = "not-a-browser"
+    try:
+        assert AudioDownloadEngine._find_cookies() == {}
+    finally:
+        if old is None:
+            os.environ.pop("YTDL_COOKIES_BROWSER", None)
+        else:
+            os.environ["YTDL_COOKIES_BROWSER"] = old
+        AudioDownloadEngine._reset_cookies_cache()
+
+
+def test_bot_fix_valid_browser_passes_through():
+    """A supported browser must map to yt-dlp's cookiesfrombrowser tuple."""
+    import os
+    AudioDownloadEngine._reset_cookies_cache()
+    old_file = os.environ.get("YTDL_COOKIES_FILE")
+    old_browser = os.environ.get("YTDL_COOKIES_BROWSER")
+    os.environ.pop("YTDL_COOKIES_FILE", None)
+    os.environ["YTDL_COOKIES_BROWSER"] = "Chrome"
+    try:
+        assert AudioDownloadEngine._find_cookies() == {"cookiesfrombrowser": ("chrome",)}
+        assert AudioDownloadEngine.cookie_status() == {
+            "configured": True,
+            "source": "browser",
+        }
+    finally:
+        if old_browser is None:
+            os.environ.pop("YTDL_COOKIES_BROWSER", None)
+        else:
+            os.environ["YTDL_COOKIES_BROWSER"] = old_browser
+        if old_file is not None:
+            os.environ["YTDL_COOKIES_FILE"] = old_file
+        AudioDownloadEngine._reset_cookies_cache()
+
+
+def test_bot_fix_cookie_status_reports_source_only(tmp_path):
+    """cookie_status must report source, never contents."""
+    import os
+    jar = tmp_path / "cookies.txt"
+    jar.write_text("# Netscape HTTP Cookie File\n")
+    AudioDownloadEngine._reset_cookies_cache()
+    old = os.environ.get("YTDL_COOKIES_FILE")
+    os.environ["YTDL_COOKIES_FILE"] = str(jar)
+    try:
+        status = AudioDownloadEngine.cookie_status()
+        assert status == {"configured": True, "source": "file"}
+        assert "cookiefile" not in status
+        assert str(jar) not in str(status)
+    finally:
+        if old is None:
+            os.environ.pop("YTDL_COOKIES_FILE", None)
+        else:
+            os.environ["YTDL_COOKIES_FILE"] = old
+        AudioDownloadEngine._reset_cookies_cache()
+
+
+def test_bot_fix_subtitle_sleep_key_is_valid():
+    """The subtitle sleep key must be one yt-dlp actually honors."""
+    AudioDownloadEngine._reset_cookies_cache()
+    try:
+        engine = AudioDownloadEngine(audio_format="mp3", quality="high", mode="audio")
+        try:
+            opts = engine._build_opts()
+        except RuntimeError:
+            return
+        assert "sleep_subtitles" not in opts, "invalid key — must be sleep_interval_subtitles"
+        assert opts.get("sleep_interval_subtitles", 0) >= 1
+    finally:
+        AudioDownloadEngine._reset_cookies_cache()
+
+
 def test_audio_format_selector_is_audio_only():
     """Regression: audio mode must select an audio-only format via the default
     multi-client merge and NOT the manually-forced mobile client list. The old
@@ -320,3 +480,35 @@ def test_retry_strategy_rejects_non_retryable_errors_and_caps_backoff():
     assert [strategy.next_delay(), strategy.next_delay(), strategy.next_delay()] == [2, 4, 5]
     # Back-off ceiling reached and retry budget exhausted: no further retries.
     assert not strategy.should_retry(RuntimeError("temporary network error"))
+
+
+def test_bot_classifier_excludes_age_gate():
+    from engine import is_bot_detection_error
+    assert is_bot_detection_error("Sign in to confirm your age to watch this video") is False
+    assert is_bot_detection_error("Please confirm your age") is False
+
+
+def test_bot_classifier_keeps_ip_check():
+    from engine import is_bot_detection_error
+    assert is_bot_detection_error("Sign in to confirm you're not a bot") is True
+    assert is_bot_detection_error("HTTP Error 429: Too Many Requests") is True
+
+
+def test_transient_rate_limit_stays_retryable():
+    from engine import RetryStrategy
+    r = RetryStrategy(max_retries=3, initial_delay=0.01)
+    assert r.should_retry(RuntimeError("temporary rate limited, retry later")) is True
+
+
+def test_cookie_opts_reach_download_opts(tmp_path, monkeypatch):
+    import engine as eng_mod
+    jar = tmp_path / "cookies.txt"
+    jar.write_text("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc\n")
+    monkeypatch.setenv("YTDL_COOKIES_FILE", str(jar))
+    eng_mod.AudioDownloadEngine._reset_cookies_cache()
+    try:
+        eng = eng_mod.AudioDownloadEngine(output_dir=str(tmp_path))
+        assert eng._build_opts().get("cookiefile") == str(jar)
+    finally:
+        eng_mod.AudioDownloadEngine._reset_cookies_cache()
+        monkeypatch.delenv("YTDL_COOKIES_FILE", raising=False)

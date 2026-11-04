@@ -99,4 +99,53 @@ function request(app, path) {
   console.log("✓ status: active-jobs snapshot failure degrades to [] (no 500)");
 }
 
+// Test 4: stability fields — cookies (source-only) and bot_breaker ride
+// /api/status so the UI can warn before the first bot-check lands.
+{
+  const app = express();
+  app.use(
+    "/api/status",
+    statusRouter(
+      makeEngine({
+        getCookieState: () => ({ configured: false, source: "none" }),
+        requestJobsFull: async () => ({
+          jobs: [],
+          bot_breaker: { open: true, consecutive_failures: 3, cooldown_seconds: 240 },
+        }),
+        // requestJobs must NOT be called when the full variant exists.
+        requestJobs: async () => {
+          throw new Error("requestJobs should not be called when requestJobsFull exists");
+        },
+      })
+    )
+  );
+  const res = await request(app, "/api/status");
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.body.cookies, { configured: false, source: "none" });
+  assert.deepStrictEqual(res.body.bot_breaker, {
+    open: true,
+    consecutive_failures: 3,
+    cooldown_seconds: 240,
+  });
+  console.log("✓ status: cookies + bot_breaker exposed via requestJobsFull");
+}
+
+// Test 5: legacy engineManager without the new accessors degrades to nulls.
+{
+  const app = express();
+  app.use(
+    "/api/status",
+    statusRouter(
+      makeEngine({
+        requestJobs: async () => [],
+      })
+    )
+  );
+  const res = await request(app, "/api/status");
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.cookies, null, "cookies should default to null");
+  assert.strictEqual(res.body.bot_breaker, null, "bot_breaker should default to null");
+  console.log("✓ status: legacy engine degrades to cookies=null, bot_breaker=null");
+}
+
 console.log("All status tests passed.");

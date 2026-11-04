@@ -22,6 +22,33 @@ function App() {
   const selectedMode = useDownloadStore((state) => state.selectedMode);
   const engineStatus = useDownloadStore((state) => state.engineStatus);
   const wsConnected = useDownloadStore((state) => state.wsConnected);
+  const cookieState = useDownloadStore((state) => state.cookieState);
+  const botBreaker = useDownloadStore((state) => state.botBreaker);
+
+  // ── Bot-check cooldown countdown ──────────────────────────────────────────
+  // The server reports cooldown_seconds only on each /api/status poll; tick
+  // locally between polls so the number moves every second, not every 15 s.
+  const [now, setNow] = useState(() => Date.now());
+  const breakerOpen = Boolean(botBreaker?.open);
+  useEffect(() => {
+    if (!breakerOpen) return;
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [breakerOpen]);
+  // Elapsed is clamped at ≥0: `now` is frozen at mount while the breaker is
+  // closed (the tick interval only runs while open), so on the first frame
+  // after the breaker trips, `now` can lag observedAt by minutes. Without
+  // the clamp, that negative elapsed INFLATES the countdown (e.g. 900s
+  // instead of 300s) until the first 1s tick corrects it. Clamped, a stale
+  // clock simply reads as "0 s elapsed" — the exact honest value.
+  const cooldownRemaining = breakerOpen && botBreaker
+    ? Math.max(
+        0,
+        Math.round(
+          botBreaker.cooldown_seconds - Math.max(0, now - botBreaker.observedAt) / 1000,
+        ),
+      )
+    : 0;
 
   // P2-18: badge counts only genuinely active items — counting every queue
   // row (incl. failed/cancelled) made "3 in queue" linger after everything
@@ -95,6 +122,31 @@ function App() {
                     <span className={`inline-block h-1.5 w-1.5 rounded-full ${engineDot}`} aria-hidden="true" />
                     {engineLabel}
                   </span>
+                  {breakerOpen && (
+                    <span
+                      className="tag tag-failed"
+                      role="status"
+                      aria-label={
+                        cooldownRemaining > 0
+                          ? `YouTube bot-check cooldown active, ${cooldownRemaining} seconds remaining`
+                          : "YouTube bot-check cooldown active"
+                      }
+                      title="YouTube is bot-checking this IP. New probes and downloads are held back until the cooldown expires. Export cookies from a signed-in browser and set YTDL_COOKIES_FILE to authenticate requests."
+                    >
+                      Bot-check
+                      {cooldownRemaining > 0 ? ` ${cooldownRemaining}s` : ""}
+                    </span>
+                  )}
+                  {cookieState?.configured === false && (
+                    <span
+                      className="tag tag-warning"
+                      role="status"
+                      aria-label="No YouTube cookies configured"
+                      title="No YouTube cookie auth configured — the engine relies on an anonymous IP, which is more likely to hit bot-checks. Export cookies from a signed-in browser (Netscape cookies.txt) and set YTDL_COOKIES_FILE, or set YTDL_COOKIES_BROWSER."
+                    >
+                      No cookies
+                    </span>
+                  )}
                   {totalQueued > 0 && (
                     <span className="tag tag-downloading">{totalQueued} in queue</span>
                   )}

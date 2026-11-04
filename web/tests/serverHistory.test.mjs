@@ -26,6 +26,21 @@ async function makeService() {
   return { svc, dir };
 }
 
+// S-3: the persistence handler runs async off bus.emit, so fixed sleeps
+// (50/80ms) flaked under parallel-suite load. Poll until the expected
+// state or a 2s deadline — fast when idle, patient when loaded.
+async function waitForHistory(svc, wantLength, what) {
+  const deadline = Date.now() + 2000;
+  for (;;) {
+    const recs = await svc.loadHistory();
+    if (recs.length === wantLength) return recs;
+    if (Date.now() > deadline) {
+      assert.fail(`timed out waiting for history (${what}); got ${recs.length}, want ${wantLength}`);
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 // Test 1: a successful result is persisted server-side.
 {
   const { svc, dir } = await makeService();
@@ -43,9 +58,8 @@ async function makeService() {
     filepath: "/tmp/A track.mp3",
   });
 
-  // Allow the async handler to run.
-  await new Promise((r) => setTimeout(r, 50));
-  const recs = await svc.loadHistory();
+  // Allow the async handler to run (poll, not fixed sleep — see S-3).
+  const recs = await waitForHistory(svc, 1, "successful result persisted");
   assert.strictEqual(recs.length, 1, "one history record should be persisted");
   assert.strictEqual(recs[0].id, "d1");
   assert.strictEqual(recs[0].title, "A track");
@@ -81,8 +95,7 @@ async function makeService() {
     fmt: "m4a",
     filepath: "/tmp/x.m4a",
   });
-  await new Promise((r) => setTimeout(r, 50));
-  const recs = await svc.loadHistory();
+  const recs = await waitForHistory(svc, 1, "capped title record persisted");
   assert.ok(recs[0].title.length <= 500, "title must be capped at 500 chars");
   unsub();
   await fs.rm(dir, { recursive: true, force: true });
@@ -96,8 +109,8 @@ async function makeService() {
   const unsub = attachHistoryPersistence(bus, svc);
   bus.emit("result", { id: "d4", success: true, title: "T", fmt: "mp3" });
   bus.emit("result", { id: "d4", success: true, title: "T", fmt: "mp3" });
-  await new Promise((r) => setTimeout(r, 80));
-  const recs = await svc.loadHistory();
+  // Both writes merge by id — poll until settle, then assert exactly one.
+  const recs = await waitForHistory(svc, 1, "duplicate results merged");
   assert.strictEqual(recs.length, 1, "duplicate ids must merge via saveRecord");
   unsub();
   await fs.rm(dir, { recursive: true, force: true });
@@ -114,7 +127,7 @@ async function makeService() {
     id: "d5", success: true, title: "FromServer", fmt: "opus",
     url: "u", filepath: "/tmp/s.opus",
   });
-  await new Promise((r) => setTimeout(r, 50));
+  await waitForHistory(svc, 1, "server record persisted before client merge");
   // Client-shaped record with same id — server must merge, not duplicate.
   await svc.saveRecord({
     id: "d5", title: "FromClient", fmt: "opus", size: "1",

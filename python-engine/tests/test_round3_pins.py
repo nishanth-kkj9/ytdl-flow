@@ -314,3 +314,43 @@ def test_duplicate_title_collision_retries_with_id_suffixed_template(monkeypatch
     assert opts_seen[0]["outtmpl"].endswith("%(title)s.%(ext)s")
     assert "[%(id)s]" in opts_seen[1]["outtmpl"]
     assert result.filepath == str(tmp_path / "Same Title [abc].mp3")
+
+
+def test_embed_failure_warns_instead_of_silent_na(monkeypatch, tmp_path):
+    """M-1: when tag embedding fails, the result must carry a warning — an
+    all-N/A checklist with no note is indistinguishable from
+    'nothing requested' and violates honest reporting (ADR-007)."""
+    import time as _time
+    from unittest.mock import patch, MagicMock
+
+    import engine as eng
+
+    engine = AudioDownloadEngine(
+        output_dir=str(tmp_path), mode="audio", audio_format="mp3", quality="high"
+    )
+    monkeypatch.setattr(engine, "_ffmpeg_bin", "/fake/ffmpeg")
+    monkeypatch.setattr(engine, "_ffmpeg_dir", "/fake")
+
+    fresh = tmp_path / "Tagged Song.mp3"
+    fresh.write_bytes(b"fresh content")
+    future = _time.time() + 10
+    os.utime(fresh, (future, future))
+    monkeypatch.setattr(engine, "_resolve_filepath", lambda info: str(fresh))
+    # Embed FAILS (e.g. mutagen write error); file itself is fine.
+    monkeypatch.setattr(eng, "embed_metadata", lambda *a, **k: (False, False))
+    monkeypatch.setattr(eng, "verify_metadata", lambda *a, **k: {})
+    monkeypatch.setattr(eng, "verify_format", lambda *a, **k: (True, "mp3", 320))
+
+    info = {"title": "Tagged Song", "id": "xyz", "ext": "mp3", "duration": 1, "uploader": "u"}
+    mock_ydl = MagicMock()
+    mock_ydl.extract_info.return_value = dict(info)
+    mock_ydl.__enter__ = MagicMock(return_value=mock_ydl)
+    mock_ydl.__exit__ = MagicMock(return_value=False)
+
+    with patch("engine.YoutubeDL", return_value=mock_ydl):
+        result = engine.download("https://youtu.be/xyz")
+
+    assert result.success is True, "file is fine — only tagging failed"
+    assert "tags not embedded" in (result.warnings or ""), (
+        "embed failure must surface a warning, not a silent all-N/A checklist"
+    )

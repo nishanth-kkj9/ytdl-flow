@@ -220,6 +220,10 @@ export async function invoke<T = any>(command: string, args?: Record<string, any
       // Snapshot of active download jobs [{ id, status }] — used on WS
       // reconnect to reconcile queue items that missed terminal events.
       return webFetch(`${base}/api/status`, "GET").then((s) => s.activeJobs ?? []);
+    case "get_status":
+      // Full status snapshot — the UI polls this for stability fields
+      // (cookies: cookie-auth state, bot_breaker: circuit-breaker cooldown).
+      return webFetch(`${base}/api/status`, "GET");
     case "save_history":
       return webFetch(`${base}/api/history`, "POST", args?.record);
     case "load_history":

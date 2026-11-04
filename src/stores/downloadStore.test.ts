@@ -21,6 +21,8 @@ describe("downloadStore", () => {
       probeInfo: null,
       probeError: null,
       engineStatus: "starting",
+      cookieState: null,
+      botBreaker: null,
       statusMessage: "",
       logs: [],
       metadataResult: null,
@@ -116,6 +118,33 @@ describe("downloadStore", () => {
     await useDownloadStore.getState().restartEngine();
     expect(invoke).toHaveBeenCalledWith("restart_engine");
     expect(useDownloadStore.getState().engineStatus).toBe("starting");
+  });
+
+  it("setBotBreaker stamps observedAt for the local countdown; null clears", () => {
+    const before = Date.now();
+    useDownloadStore.getState().setBotBreaker({
+      open: true,
+      consecutive_failures: 3,
+      cooldown_seconds: 300,
+    });
+    const bb = useDownloadStore.getState().botBreaker!;
+    expect(bb.open).toBe(true);
+    expect(bb.cooldown_seconds).toBe(300);
+    expect(bb.observedAt).toBeGreaterThanOrEqual(before);
+    expect(bb.observedAt).toBeLessThanOrEqual(Date.now());
+
+    useDownloadStore.getState().setBotBreaker(null);
+    expect(useDownloadStore.getState().botBreaker).toBeNull();
+  });
+
+  it("setCookieState stores the source-only shape", () => {
+    useDownloadStore.getState().setCookieState({ configured: false, source: "none" });
+    expect(useDownloadStore.getState().cookieState).toEqual({
+      configured: false,
+      source: "none",
+    });
+    useDownloadStore.getState().setCookieState(null);
+    expect(useDownloadStore.getState().cookieState).toBeNull();
   });
 
   it("restoreActiveJobs rebuilds the queue from active jobs (F-02)", async () => {

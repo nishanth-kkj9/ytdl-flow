@@ -111,3 +111,28 @@ def test_engine_process_survives_hostile_stdin(tmp_path):
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+
+def test_breaker_opens_after_three_bot_failures():
+    import ipc_main as ipc
+    ipc._BOT_BREAKER_FAILURES = 0
+    ipc._BOT_BREAKER_OPEN_UNTIL = 0.0
+    ipc._BOT_BREAKER_LAST_ERROR = None
+    try:
+        ipc._bot_breaker_failure("Sign in to confirm you're not a bot")
+        ipc._bot_breaker_failure("Sign in to confirm you're not a bot")
+        assert ipc._bot_breaker_check() is None
+        ipc._bot_breaker_failure("Sign in to confirm you're not a bot")
+        assert ipc._bot_breaker_check() is not None
+        ipc._bot_breaker_success()
+        assert ipc._bot_breaker_check() is None
+    finally:
+        ipc._bot_breaker_success()
+
+
+def test_dispatch_safely_contains_killer_command(monkeypatch):
+    import ipc_main as ipc
+    def boom(_cmd):
+        raise OSError("disk full")
+    monkeypatch.setattr(ipc, "_handle_command", boom)
+    ipc._dispatch_safely({"cmd": "download", "id": "x"})  # must not raise

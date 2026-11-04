@@ -332,4 +332,109 @@ function collect(bus, event) {
   console.log("✓ recover() emits terminal errors for discarded pending commands");
 }
 
+// Test 15 (stability): cookie-auth state from engine_ready reaches
+// getCookieState() — shape-only (configured/source), never contents; legacy
+// payloads without the field stay null instead of throwing.
+{
+  const bus = makeBus();
+  const mgr = new EngineManager(bus);
+  assert.strictEqual(mgr.getCookieState(), null, "no ready message yet → null");
+  mgr.handleEngineMessage({
+    type: "engine_ready",
+    ffmpeg: true,
+    cookies: { configured: true, source: "browser" },
+  });
+  assert.deepStrictEqual(mgr.getCookieState(), {
+    configured: true,
+    source: "browser",
+  });
+
+  const legacy = new EngineManager(makeBus());
+  legacy.handleEngineMessage({ type: "engine_ready", ffmpeg: true });
+  assert.strictEqual(legacy.getCookieState(), null, "legacy payload → null");
+
+  // Cookie state must not survive engine death (same rule as tools).
+  mgr.child = { kill: () => {} };
+  mgr.stdin = { destroyed: false };
+  mgr.spawn = () => {};
+  mgr._onChildExit({}, 1, null);
+  assert.strictEqual(mgr.getCookieState(), null, "cleared on child exit");
+}
+
+// Test 16 (stability): requestJobsFull resolves {jobs, bot_breaker} so
+// /api/status can surface the bot-check cooldown; requestJobs keeps the
+// legacy array shape for existing callers.
+{
+  const bus = makeBus();
+  const mgr = new EngineManager(bus);
+  mgr.child = {};
+  mgr.stdin = { destroyed: false };
+  let sent = null;
+  mgr._writeCommand = (cmd) => {
+    sent = cmd;
+  };
+  const promise = mgr.requestJobsFull(500);
+  assert.ok(sent && sent.cmd === "jobs", "requestJobsFull should send jobs");
+  mgr.handleEngineMessage({
+    type: "jobs_result",
+    request_id: sent.request_id,
+    jobs: [{ id: "a", status: "running" }],
+    bot_breaker: { open: false, strikes: 0 },
+  });
+  const full = await promise;
+  assert.deepStrictEqual(full.jobs, [{ id: "a", status: "running" }]);
+  assert.deepStrictEqual(full.bot_breaker, { open: false, strikes: 0 });
+
+  // Legacy array shape for requestJobs().
+  const mgr2 = new EngineManager(makeBus());
+  mgr2.child = {};
+  mgr2.stdin = { destroyed: false };
+  let sent2 = null;
+  mgr2._writeCommand = (cmd) => {
+    sent2 = cmd;
+  };
+  const p2 = mgr2.requestJobs(500);
+  mgr2.handleEngineMessage({
+    type: "jobs_result",
+    request_id: sent2.request_id,
+    jobs: [],
+    bot_breaker: { open: true, cooldown_remaining: 42 },
+  });
+  assert.deepStrictEqual(await p2, [], "requestJobs must stay array-shaped");
+
+  // Engine down → both shapes resolve safe defaults (never reject).
+  const mgr3 = new EngineManager(makeBus());
+  assert.deepStrictEqual(await mgr3.requestJobsFull(50), {
+    jobs: [],
+    bot_breaker: null,
+  });
+  assert.deepStrictEqual(await mgr3.requestJobs(50), []);
+}
+
+// Flush must survive a mid-flush write throw: failed command is requeued,
+// order preserved, nothing dropped.
+{
+  const bus = makeBus();
+  const mgr = new EngineManager(bus);
+  mgr.stdin = { destroyed: false, write: () => { throw new Error("EPIPE"); }, once: () => {} };
+  mgr.pendingCommands = [{ cmd: "probe", id: "a", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }];
+  assert.doesNotThrow(() => mgr.flushPending());
+  assert.ok(mgr.pendingCommands.length >= 1, "failed command must be requeued, not dropped");
+}
+
+// Mid-flush failure with 3 queued commands: failed + tail requeued in order.
+{
+  const bus = makeBus();
+  const mgr = new EngineManager(bus);
+  let calls = 0;
+  mgr.stdin = { destroyed: false, write: () => { calls++; throw new Error("EPIPE"); }, once: () => {} };
+  mgr.pendingCommands = [
+    { cmd: "probe", id: "a", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+    { cmd: "probe", id: "b", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+    { cmd: "probe", id: "c", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+  ];
+  assert.doesNotThrow(() => mgr.flushPending());
+  assert.deepStrictEqual(mgr.pendingCommands.map((c) => c.id), ["a", "b", "c"]);
+}
+
 console.log("All engineManager tests passed.");

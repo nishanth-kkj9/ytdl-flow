@@ -16,11 +16,19 @@ export function statusRouter(engineManager) {
     // the engine is down — requestJobs() resolves [] in that case; the catch
     // is defense-in-depth.
     let activeJobs = [];
+    let botBreaker = null;
     if (typeof engineManager.requestJobs === "function") {
       try {
-        activeJobs = await engineManager.requestJobs(500);
+        if (typeof engineManager.requestJobsFull === "function") {
+          const full = await engineManager.requestJobsFull(500);
+          activeJobs = full.jobs;
+          botBreaker = full.bot_breaker;
+        } else {
+          activeJobs = await engineManager.requestJobs(500);
+        }
       } catch {
         activeJobs = [];
+        botBreaker = null;
       }
     }
     res.json({
@@ -39,8 +47,16 @@ export function statusRouter(engineManager) {
       // Tool availability surfaced from the last engine_ready message
       // (null/absent until the engine first reports readiness).
       tools,
-      // Commands queued while the engine is down/starting (backlog pressure,
-      // capped by config.engineMaxPendingCommands).
+      // YouTube cookie-auth state (source only, never contents): lets the UI
+      // warn "no auth configured" before the first bot-check lands. Null on
+      // legacy engines that omit the field.
+      cookies: typeof engineManager.getCookieState === "function"
+        ? engineManager.getCookieState()
+        : null,
+      // Bot-check circuit-breaker snapshot from the jobs query (null when the
+      // engine is down or predates the field). Lets the UI show the cooldown
+      // countdown without polling a separate endpoint.
+      bot_breaker: botBreaker,
       pendingCommands: engineManager.getPendingCount
         ? engineManager.getPendingCount()
         : 0,

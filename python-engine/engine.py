@@ -238,14 +238,33 @@ class DownloadResult:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def is_bot_detection_error(msg: str) -> bool:
+    # BOT-FIX: only the genuine YouTube auth/bot-check signals fail fast.
+    # Generic phrases like "rate limit" / "rate limited" stay retryable —
+    # transient 429s / "temporary ... rate limited" blips must keep the
+    # normal exponential-backoff path (guarded by test_download_retry_*).
+    # "sign in to confirm your AGE" is an age-gate, not an IP bot-check —
+    # exclude it so age-gated videos keep normal retry behavior.
+    m = msg.lower()
+    if "sign in to confirm your age" in m or "confirm your age" in m:
+        return False
     indicators = (
-        "sign in to confirm", "bot", "captcha",
-        "too many requests", "rate limit", "403",
+        "sign in to confirm", "not a bot", "captcha",
+        "too many requests", "http error 429",
         "video unavailable", "age-restricted", "members-only",
         "private video",
     )
-    m = msg.lower()
     return any(ind in m for ind in indicators)
+
+
+def bot_fix_hint() -> str:
+    """Actionable hint appended to BotDetectionError messages."""
+    return (
+        "YouTube is bot-checking this IP (common after rapid successive "
+        "downloads). Fix: export YouTube cookies from a signed-in browser "
+        "(Netscape cookies.txt) and set YTDL_COOKIES_FILE=<path> before "
+        "starting the server — or set YTDL_COOKIES_BROWSER=chrome. "
+        "Wait a few minutes and space out downloads."
+    )
 
 
 def classify_error_type(msg: str) -> str:
@@ -898,6 +917,21 @@ def _embed_ffmpeg(filepath: str, meta: Metadata, ffmpeg_bin: str) -> tuple[bool,
                 pass
 
 
+def _ffprobe_bin() -> str | None:
+    """Locate ffprobe. `shutil.which` first (fast path, preserves current
+    behavior where PATH resolves); else the engine's own FFmpeg resolution
+    (FFMPEG_PATH/HOME, known install paths), so FFMPEG_PATH-only setups
+    don't silently downgrade mkv/webm verification to extension-trust (N-06).
+    Same falsy contract as shutil.which: absolute path or None."""
+    found = shutil.which("ffprobe")
+    if found:
+        return found
+    ff_result = AudioDownloadEngine._find_ffmpeg()
+    if ff_result:
+        return ff_result[2] or None
+    return None
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  Metadata verification — re-opens file and checks key fields
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1101,7 +1135,7 @@ def verify_metadata(filepath: str, meta: Metadata) -> dict[str, bool]:
                 pass  # can't open — fall through
 
             # ffprobe fallback (primary when mutagen can't read RIFF INFO)
-            ffprobe_bin = shutil.which("ffprobe")
+            ffprobe_bin = _ffprobe_bin()
             if ffprobe_bin:
                 try:
                     import json as _json
@@ -1132,7 +1166,7 @@ def verify_metadata(filepath: str, meta: Metadata) -> dict[str, bool]:
 
         # ── MKV / WebM: ffprobe JSON ─────────────────────────────────────────
         if ext in (".mkv", ".webm"):
-            ffprobe_bin = shutil.which("ffprobe")
+            ffprobe_bin = _ffprobe_bin()
             if ffprobe_bin:
                 try:
                     import json as _json
@@ -1183,7 +1217,7 @@ def verify_format(filepath: str, expected_fmt: str) -> tuple[bool, str, int]:
             ext = os.path.splitext(filepath)[1].lower().lstrip(".")
             if ext in ("mkv", "webm", "mp4", "m4a", "wav", "opus", "mp3"):
                 # File exists and extension matches requested format → trust, check via ffprobe if available.
-                ffprobe_bin = shutil.which("ffprobe")
+                ffprobe_bin = _ffprobe_bin()
                 if ffprobe_bin and ext in ("mkv", "webm"):
                     try:
                         import json as _j
@@ -1492,6 +1526,105 @@ class AudioDownloadEngine:
         AudioDownloadEngine._DENO_CACHE = ""
         return None
 
+    # ── YouTube cookie auth (bot-check bypass) ────────────────────────────────
+    # YouTube flags anonymous datacenter/VPN/burst traffic with "Sign in to
+    # confirm you're not a bot". Authenticated cookies from a signed-in
+    # browser session prove a real account is behind the request and clear
+    # the check in most cases.
+
+    _COOKIES_CACHE: dict | None = None
+    _COOKIES_LOCK = threading.Lock()
+
+    # Browsers yt-dlp can read cookies from (yt_dlp.cookies.SUPPORTED_BROWSERS
+    # on 2026.08.19: brave/chrome/chromium/edge/firefox/opera/safari/vivaldi/
+    # whale). Anything else fails deep inside yt-dlp with an opaque error —
+    # reject it here with the valid list instead of a confusing crash.
+    _SUPPORTED_COOKIE_BROWSERS = frozenset({
+        "brave", "chrome", "chromium", "edge", "firefox",
+        "opera", "safari", "vivaldi", "whale",
+    })
+
+    @staticmethod
+    def _find_cookies() -> dict:
+        """Resolve cookie opts for yt-dlp. Cached after the first call.
+
+        Sources (in order):
+          1. YTDL_COOKIES_FILE  — path to a Netscape cookies.txt export
+             (headless-safe; recommended for servers).
+          2. YTDL_COOKIES_BROWSER — browser name for --cookies-from-browser
+             style auth (e.g. "chrome", "firefox", "edge", "brave").
+
+        Returns a dict of yt-dlp opts (possibly empty). Cookie CONTENTS are
+        never logged — only whether a source was configured.
+
+        Thread-safe: the engine runs 2 probe + 5 download threads
+        concurrently, and the first burst would otherwise race on the
+        check-then-set (duplicate warn lines, torn-dict edge). The lock also
+        guards _reset_cookies_cache (tests) against a concurrent reader.
+        Cache key includes the env values so a mid-process env change (tests,
+        operator export + engine restart) can't serve a stale path.
+        """
+        env_file = (os.environ.get("YTDL_COOKIES_FILE") or "").strip().strip("\"'")
+        env_browser = (os.environ.get("YTDL_COOKIES_BROWSER") or "").strip().lower()
+        with AudioDownloadEngine._COOKIES_LOCK:
+            cache = AudioDownloadEngine._COOKIES_CACHE
+            if (
+                cache is not None
+                and cache.get("_env_file") == env_file
+                and cache.get("_env_browser") == env_browser
+            ):
+                return {k: v for k, v in cache.items() if not k.startswith("_env_")}
+
+            opts: dict = {}
+            if env_file:
+                if os.path.isfile(env_file):
+                    opts["cookiefile"] = env_file
+                else:
+                    applog.warn(
+                        f"YTDL_COOKIES_FILE points at a missing file: {env_file} — "
+                        "continuing without cookies (bot-checks may fail)"
+                    )
+            elif env_browser:
+                if env_browser in AudioDownloadEngine._SUPPORTED_COOKIE_BROWSERS:
+                    opts["cookiesfrombrowser"] = (env_browser,)
+                else:
+                    applog.warn(
+                        f"YTDL_COOKIES_BROWSER={env_browser!r} is not supported by "
+                        f"yt-dlp (valid: {', '.join(sorted(AudioDownloadEngine._SUPPORTED_COOKIE_BROWSERS))}) — "
+                        "continuing without cookies (bot-checks may fail)"
+                    )
+
+            AudioDownloadEngine._COOKIES_CACHE = {
+                **opts,
+                "_env_file": env_file,
+                "_env_browser": env_browser,
+            }
+            return dict(opts)
+
+    @staticmethod
+    def _reset_cookies_cache() -> None:
+        """Test-only: clear the cookie cache under the lock."""
+        with AudioDownloadEngine._COOKIES_LOCK:
+            AudioDownloadEngine._COOKIES_CACHE = None
+
+    @staticmethod
+    def cookie_status() -> dict:
+        """Safe-for-status cookie report: source configured, never contents.
+
+        Returns {"configured": bool, "source": "file"|"browser"|"none"} so
+        /api/status can tell the operator whether bot-check auth is armed
+        without ever exposing cookie values or file contents.
+        """
+        opts = AudioDownloadEngine._find_cookies()
+        if "cookiefile" in opts:
+            return {"configured": True, "source": "file"}
+        if "cookiesfrombrowser" in opts:
+            return {"configured": True, "source": "browser"}
+        return {"configured": False, "source": "none"}
+
+    def _cookie_opts(self) -> dict:
+        return self._find_cookies()
+
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def probe(self, url: str) -> tuple[dict | None, str]:
@@ -1513,6 +1646,12 @@ class AudioDownloadEngine:
             "retries":        3,
             "extractor_retries": 2,
             "geo_bypass": True,
+            # BOT-FIX: same pacing/cookies as downloads (see _build_opts).
+            # Probes are what tripped the bot throttle after ~20 rapid
+            # lookups — cookies authenticate them, sleep_interval_requests
+            # spaces bursts (extraction-phase only; no pre-download sleep).
+            "sleep_interval_requests": 2,
+            **self._cookie_opts(),
         }
         if self._deno_bin:
             opts["js_runtimes"] = {"deno": {"path": self._deno_bin}}
@@ -1537,6 +1676,10 @@ class AudioDownloadEngine:
             except Exception as exc:
                 last_err = str(exc)
                 applog.warn(f"Probe attempt {attempt + 1} failed: {last_err[:120]}")
+                # BOT-FIX: same fail-fast as downloads — retrying into an
+                # active bot-check only hardens the block.
+                if is_bot_detection_error(last_err):
+                    break
                 # F-11: deadline — once 60 s of wall time is spent, report the
                 # last error now instead of looping through the remaining
                 # attempts (the client watchdog fires at 60 s anyway).
@@ -1546,6 +1689,10 @@ class AudioDownloadEngine:
                     time.sleep(1.5 * (attempt + 1))
 
         applog.log_probe_error(url, classify_error_type(last_err), last_err)
+        # BOT-FIX: surface the actionable cookie/pacing hint to the UI
+        # instead of the raw yt-dlp auth paragraph alone.
+        if is_bot_detection_error(last_err):
+            last_err = f"{last_err}\n\n{bot_fix_hint()}"
         return None, last_err
 
     def download(self, url: str, info: dict | None = None,
@@ -1565,6 +1712,11 @@ class AudioDownloadEngine:
                 return self._download_once(url, info)
             except Exception as exc:
                 last_exc = exc
+                # BOT-FIX: hammering the same URL while the bot-check is active
+                # makes the IP look MORE automated, not less. Fail fast with
+                # the actionable hint instead of burning all retries.
+                if is_bot_detection_error(str(exc)):
+                    break
                 if not retry.should_retry(exc):
                     break
                 delay = retry.next_delay()
@@ -1588,6 +1740,8 @@ class AudioDownloadEngine:
 
         error_msg  = str(last_exc)
         error_type = classify_error_type(error_msg)
+        if error_type == "BotDetectionError":
+            error_msg = f"{error_msg}\n\n{bot_fix_hint()}"
         applog.log_download_error(url, error_type, error_msg)
         return DownloadResult(
             success=False, url=url,
@@ -1614,6 +1768,24 @@ class AudioDownloadEngine:
             "fragment_retries":   10,
             "extractor_retries":  5,
             "file_access_retries": 5,
+            # BOT-FIX: pace requests so rapid successive probes/downloads stop
+            # tripping YouTube's "Sign in to confirm you're not a bot" throttle.
+            # sleep_interval_requests paces EXTRACTION requests (the phase that
+            # got throttled after ~20 lookups) with no first-request penalty.
+            # sleep_interval/max_sleep_interval pace the DOWNLOAD phase (per
+            # yt-dlp docs they sleep before each download) — kept small so a
+            # single interactive download stays fast while bursts spread out.
+            # NOTE: the subtitle key is sleep_interval_subtitles (not
+            # sleep_subtitles) — verified against yt-dlp 2026.08.19 source.
+            "sleep_interval_requests": 2,
+            "sleep_interval":        1,
+            "max_sleep_interval":    5,
+            "sleep_interval_subtitles": 1,
+            # BOT-FIX: authenticated cookies bypass the anonymous-IP bot check.
+            # Resolved once per engine instance (see _find_cookies) from
+            # YTDL_COOKIES_FILE (Netscape cookies.txt) or YTDL_COOKIES_BROWSER
+            # (e.g. "chrome"). Never logged — cookie contents are secrets.
+            **self._cookie_opts(),
             # ── Hooks ──────────────────────────────────────────────────────────
             "progress_hooks": [self._hook],
         }
@@ -1853,6 +2025,8 @@ class AudioDownloadEngine:
         metadata_container = ""
         metadata_cover_art = False
         thumb_ok = False
+        meta_ok = True  # M-1: defined when embedding is off so the warnings
+        # block below can distinguish "not attempted" from "attempted+failed".
         if self.embed_metadata:
             meta = Metadata.from_info(info)
             meta_ok, thumb_ok = embed_metadata(
@@ -1900,6 +2074,13 @@ class AudioDownloadEngine:
             warnings.append(
                 "downloaded without FFmpeg — progressive stream "
                 "(resolution may be below the requested preset)"
+            )
+        # M-1: tag embedding failed — the file is fine but the checklist
+        # would otherwise render all-N/A with no note, indistinguishable
+        # from "nothing requested" (ADR-007 honesty).
+        if self.embed_metadata and not meta_ok:
+            warnings.append(
+                "metadata tags not embedded — file is playable, tags missing"
             )
 
         return DownloadResult(

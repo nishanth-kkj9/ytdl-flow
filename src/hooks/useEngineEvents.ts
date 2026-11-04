@@ -13,6 +13,8 @@ export function useEngineEvents() {
   const setMetadataResult = useDownloadStore((state) => state.setMetadataResult);
   const setStatusMessage = useDownloadStore((state) => state.setStatusMessage);
   const addToast = useDownloadStore((state) => state.addToast);
+  const setCookieState = useDownloadStore((state) => state.setCookieState);
+  const setBotBreaker = useDownloadStore((state) => state.setBotBreaker);
 
   const downloadBaseRef = useRef<string | null>(null);
   // P2-23: prevents overlapping reconcile passes when onReconnect fires
@@ -51,6 +53,11 @@ export function useEngineEvents() {
     let unlistenEngine: UnlistenFn | null = null;
     let unlistenReconnect: UnlistenFn | null = null;
     let unlistenConnection: UnlistenFn | null = null;
+    // N-04: mount-time requestJobs can lose its 500ms race against a ready
+    // engine. Re-run the restore once on the first engine_ready after mount
+    // (restores are idempotent; later readies from restarts find an empty
+    // job map, so once-only is correct and cannot loop).
+    let restoredOnReady = false;
 
     (async () => {
       try {
@@ -85,6 +92,20 @@ export function useEngineEvents() {
         // engine_ready was previously ignored).
         if (payload.type === "engine_ready") {
           setEngineStatus("ready");
+          if (!restoredOnReady) {
+            restoredOnReady = true;
+            void useDownloadStore.getState().restoreActiveJobs();
+          }
+          // Cookie-auth state rides engine_ready (shape only — configured/
+          // source, never contents). Legacy engines omit it: keep the last
+          // known state instead of clobbering with garbage.
+          const cookies = payload.cookies;
+          if (cookies && typeof cookies === "object") {
+            setCookieState({
+              configured: Boolean((cookies as Record<string, unknown>).configured),
+              source: String((cookies as Record<string, unknown>).source ?? "none"),
+            });
+          }
         }
         if (payload.type === "fatal_error") {
           setEngineStatus("error");
@@ -101,6 +122,13 @@ export function useEngineEvents() {
             }
           }
           setEngineStatus("starting");
+          // The bot-check breaker is module-global state INSIDE the engine
+          // process — a crash wipes it (a fresh engine starts closed). Close
+          // the header countdown immediately instead of advertising a
+          // cooldown that no longer exists until the next status poll (≤15 s)
+          // reports null/closed. Mirrors the backend clearing readyCookies
+          // on child exit.
+          setBotBreaker(null);
         }
         const id = String(payload.id ?? "");
 
@@ -204,6 +232,13 @@ export function useEngineEvents() {
                   ...(payload.title ? { title: String(payload.title) } : {}),
                 });
               }
+              return;
+            }
+            // S-1: terminal rows are final. A late/duplicate result must
+            // never flip completed<->failed (no engine path emits that, but
+            // the store previously accepted any terminal overwrite blindly).
+            if (current && (current.status === "completed" || current.status === "failed")) {
+              addLog(`Duplicate result ignored for ${current.status} download: ${id}`, "warn");
               return;
             }
             updateQueueItem(id, {
@@ -396,5 +431,81 @@ export function useEngineEvents() {
       unlistenReconnect?.();
       unlistenConnection?.();
     };
-  }, [addHistoryItem, addLog, addToast, setEngineStatus, setMetadataResult, setProbeInfo, setStatusMessage, setWsConnected, updateQueueItem]);
+  }, [addHistoryItem, addLog, addToast, setBotBreaker, setCookieState, setEngineStatus, setMetadataResult, setProbeInfo, setStatusMessage, setWsConnected, updateQueueItem]);
+
+  // ── Stability polling: cookie-auth + bot-check breaker ─────────────────────
+  // engine_ready carries cookie state, but the circuit breaker only ever
+  // appears in jobs replies (surfaced by /api/status) — there is no WS event
+  // for it. Poll lightly so the header can show a live cooldown countdown and
+  // the "no cookies configured" warning without inventing a new engine event.
+  // Failures are silent: the last known state stays on screen.
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+
+    async function refresh() {
+      // Never stack polls — a slow server must not build a fetch backlog.
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const status = await invoke<Record<string, unknown>>("get_status");
+        if (cancelled || !status || typeof status !== "object") return;
+
+        // Cookie state: present-but-null means "engine down/legacy" → clear;
+        // absent means an older server that predates the field → keep last.
+        if ("cookies" in status) {
+          const cookies = status.cookies as Record<string, unknown> | null;
+          setCookieState(
+            cookies && typeof cookies === "object"
+              ? {
+                  configured: Boolean(cookies.configured),
+                  source: String(cookies.source ?? "none"),
+                }
+              : null
+          );
+        }
+
+        // Circuit breaker: explicit null (legacy/down) closes the indicator;
+        // a fresh object updates the countdown anchor via setBotBreaker.
+        // Numeric fields are guarded with Number.isFinite — a malformed
+        // payload would otherwise inject NaN into the header countdown
+        // (Math.max(0, NaN) === NaN renders as "Bot-check NaNs").
+        if ("bot_breaker" in status) {
+          const bb = status.bot_breaker as Record<string, unknown> | null;
+          const failures = Number(bb?.consecutive_failures ?? 0);
+          const cooldown = Number(bb?.cooldown_seconds ?? 0);
+          setBotBreaker(
+            bb && typeof bb === "object"
+              ? {
+                  open: Boolean(bb.open),
+                  consecutive_failures: Number.isFinite(failures) ? failures : 0,
+                  cooldown_seconds: Number.isFinite(cooldown) ? cooldown : 0,
+                }
+              : null
+          );
+        }
+      } catch {
+        // Status unreachable (server restarting / network blip) — keep the
+        // last known state; the next tick retries.
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    void refresh();
+    const iv = setInterval(() => void refresh(), 15_000);
+    // Browsers throttle timers in background tabs (Chrome clamps to ~1/min
+    // after 5 min hidden), so the breaker anchor goes stale while the tab is
+    // in the background and the countdown would read 0 / wrong on return.
+    // Re-poll the moment the tab becomes visible again.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [setCookieState, setBotBreaker]);
 }

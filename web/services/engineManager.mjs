@@ -45,6 +45,9 @@ export class EngineManager {
     this._jobRequestSeq = 0;
     // Last engine_ready payload — surfaces ffmpeg/ffprobe/deno availability.
     this.readyTools = null;
+    // Cookie-auth state from the last engine_ready (source only, never
+    // contents) — null until the first ready message.
+    this.readyCookies = null;
     // Set to true while we are deliberately stopping/replacing the child so
     // _onChildExit doesn't misread a clean SIGTERM (code === null) as a crash
     // and schedule a ghost respawn during shutdown or recover().
@@ -160,6 +163,7 @@ export class EngineManager {
       this.child = null;
       this.stdin = null;
       this.readyTools = null; // PR-03: no stale tools for a spawn failure
+      this.readyCookies = null;
       this.bus.emit("engine_error", { error: `Engine spawn failed: ${err.message}` });
       // Treat a spawn failure like a crash so the bounded-restart logic can
       // recover (e.g. when Python is temporarily unavailable) instead of
@@ -186,6 +190,7 @@ export class EngineManager {
     this.child = null;
     this.stdin = null;
     this.readyTools = null;
+    this.readyCookies = null;
     // A deliberate stop (shutdown, recover) kills the child with SIGTERM:
     // code is null and null !== 0 — that must not broadcast engine_crashed
     // or schedule a respawn.
@@ -240,6 +245,14 @@ export class EngineManager {
           yt_dlp: Boolean(msg.yt_dlp),
           mutagen: Boolean(msg.mutagen),
         };
+        // Cookie-auth observability: additive field, validated shape-only
+        // (never contents). Legacy engines omit it → stays null, never crash.
+        if (msg.cookies && typeof msg.cookies === "object") {
+          this.readyCookies = {
+            configured: Boolean(msg.cookies.configured),
+            source: typeof msg.cookies.source === "string" ? msg.cookies.source : "none",
+          };
+        }
         this.bus.emit("engine_ready", msg);
         // Flush any commands that were queued while the engine was starting.
         this.flushPending();
@@ -251,7 +264,12 @@ export class EngineManager {
         if (pending) {
           this.pendingJobRequests.delete(msg.request_id);
           clearTimeout(pending.timer);
-          pending.resolve(Array.isArray(msg.jobs) ? msg.jobs : []);
+          const jobs = Array.isArray(msg.jobs) ? msg.jobs : [];
+          if (pending.full) {
+            pending.resolve({ jobs, bot_breaker: msg.bot_breaker ?? null });
+          } else {
+            pending.resolve(jobs);
+          }
         }
         break;
       }
@@ -349,7 +367,13 @@ export class EngineManager {
       this.pendingCommands.push(command);
       return;
     }
-    const ok = this.stdin.write(JSON.stringify(command) + "\n");
+    let ok;
+    try {
+      ok = this.stdin.write(JSON.stringify(command) + "\n");
+    } catch {
+      this.pendingCommands.push(command);
+      return;
+    }
     if (!ok) {
       // Resume writing queued commands once the outgoing buffer drains.
       this.stdin.once("drain", () => this.flushPending());
@@ -360,8 +384,22 @@ export class EngineManager {
     if (!this.stdin || this.stdin.destroyed) return;
     const pending = this.pendingCommands;
     this.pendingCommands = [];
-    for (const cmd of pending) {
-      this._writeCommand(cmd);
+    for (let i = 0; i < pending.length; i++) {
+      const before = this.pendingCommands.length;
+      try {
+        this._writeCommand(pending[i]);
+      } catch {
+        // Pipe died mid-flush: requeue the failed command AND the
+        // unprocessed tail, in order, and stop until respawn.
+        this.pendingCommands.push(...pending.slice(i));
+        break;
+      }
+      // _writeCommand requeues internally when the pipe is gone; stop the
+      // loop and preserve the tail instead of churning the dead pipe.
+      if (this.pendingCommands.length > before) {
+        this.pendingCommands.push(...pending.slice(i + 1));
+        break;
+      }
     }
   }
 
@@ -370,7 +408,14 @@ export class EngineManager {
   // route to let a reconnecting browser reconcile queue items that may have
   // missed terminal events while its WebSocket was down. Resolves to [] when
   // the engine is unavailable (never rejects — callers must not have to guard).
+  // NOTE: jobs_result now also carries bot_breaker — requestJobsFull() keeps
+  // the raw payload for /api/status observability; requestJobs() stays
+  // array-shaped for existing callers (status route, reconcile paths).
   requestJobs(timeoutMs = 500) {
+    return this.requestJobsFull(timeoutMs).then((r) => r.jobs);
+  }
+
+  requestJobsFull(timeoutMs = 500) {
     return new Promise((resolve) => {
       if (
         this.fatalError ||
@@ -378,15 +423,15 @@ export class EngineManager {
         !this.stdin ||
         this.stdin.destroyed
       ) {
-        resolve([]);
+        resolve({ jobs: [], bot_breaker: null });
         return;
       }
       const requestId = `jobs-${++this._jobRequestSeq}`;
       const timer = setTimeout(() => {
         this.pendingJobRequests.delete(requestId);
-        resolve([]);
+        resolve({ jobs: [], bot_breaker: null });
       }, timeoutMs);
-      this.pendingJobRequests.set(requestId, { resolve, timer });
+      this.pendingJobRequests.set(requestId, { resolve, timer, full: true });
       this._writeCommand({ cmd: "jobs", request_id: requestId });
     });
   }
@@ -395,7 +440,13 @@ export class EngineManager {
   _failPendingJobRequests() {
     for (const [requestId, pending] of this.pendingJobRequests) {
       clearTimeout(pending.timer);
-      pending.resolve([]);
+      // Test 10 pins the legacy array shape for requestJobs(); the full-shape
+      // caller (requestJobsFull) gets the object shape. Resolve per-caller.
+      if (pending.full) {
+        pending.resolve({ jobs: [], bot_breaker: null });
+      } else {
+        pending.resolve([]);
+      }
       this.pendingJobRequests.delete(requestId);
     }
   }
@@ -408,6 +459,13 @@ export class EngineManager {
   // engine_ready message, or null if the engine hasn't reported readiness.
   getTools() {
     return this.readyTools;
+  }
+
+  // Cookie-auth state from the last engine_ready (source only, never
+  // contents). Lets /api/status warn "no YouTube auth configured" before the
+  // first bot-check lands.
+  getCookieState() {
+    return this.readyCookies;
   }
 
   // Number of commands queued while the engine is down or starting up.

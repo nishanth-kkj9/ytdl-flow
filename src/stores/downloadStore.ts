@@ -35,6 +35,27 @@ function extractRefId(message: string): string | undefined {
 
 export type EngineStatus = "starting" | "ready" | "error";
 
+/**
+ * Cookie-auth state from the last engine report — shape only
+ * (configured/source), never cookie contents.
+ */
+export interface CookieState {
+  configured: boolean;
+  source: string;
+}
+
+/**
+ * Bot-check circuit-breaker snapshot from /api/status. `observedAt` is
+ * stamped client-side by setBotBreaker() so the header can tick the
+ * countdown locally between polls.
+ */
+export interface BotBreakerState {
+  open: boolean;
+  consecutive_failures: number;
+  cooldown_seconds: number;
+  observedAt: number;
+}
+
 interface DownloadState {
   queue: DownloadItem[];
   history: HistoryItem[];
@@ -43,6 +64,16 @@ interface DownloadState {
   /** True from probeUrl() until the WS probe_result/error arrives (F-11). */
   probeInFlight: boolean;
   engineStatus: EngineStatus;
+  /**
+   * Cookie-auth state from the engine (source only, never contents).
+   * null = unknown (legacy engine or engine not yet ready).
+   */
+  cookieState: CookieState | null;
+  /**
+   * Bot-check circuit-breaker snapshot from /api/status.
+   * null = unknown/closed. Powers the header cooldown indicator.
+   */
+  botBreaker: BotBreakerState | null;
   selectedMode: "audio" | "video";
   selectedFormat: string;
   selectedQuality: string;
@@ -66,6 +97,11 @@ interface DownloadState {
   setSelectedQuality: (quality: string) => void;
   setProbeInfo: (info: ProbeInfo | null) => void;
   setEngineStatus: (status: EngineStatus) => void;
+  setCookieState: (cookieState: CookieState | null) => void;
+  /** Accepts the raw /api/status shape; stamps observedAt for the countdown. */
+  setBotBreaker: (
+    botBreaker: Omit<BotBreakerState, "observedAt"> | null
+  ) => void;
   setStatusMessage: (message: string) => void;
   setMetadataResult: (result: MetadataResult | null) => void;
   addLog: (message: string, level?: "info" | "warn" | "error") => void;
@@ -92,6 +128,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   probeError: null,
   probeInFlight: false,
   engineStatus: "starting",
+  cookieState: null,
+  botBreaker: null,
   selectedMode: "audio",
   selectedFormat: "mp3",
   selectedQuality: "high",
@@ -253,6 +291,11 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   setSelectedQuality: (quality) => set({ selectedQuality: quality }),
   setProbeInfo: (info) => set({ probeInfo: info, probeError: null }),
   setEngineStatus: (engineStatus) => set({ engineStatus }),
+  setCookieState: (cookieState) => set({ cookieState }),
+  setBotBreaker: (botBreaker) =>
+    set({
+      botBreaker: botBreaker ? { ...botBreaker, observedAt: Date.now() } : null,
+    }),
   setStatusMessage: (statusMessage) => set({ statusMessage }),
   setMetadataResult: (result) => set({ metadataResult: result }),
   addLog: (message, level = "info") => set((state) => {

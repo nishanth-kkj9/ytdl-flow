@@ -1,0 +1,547 @@
+
+=== DIRECTORY TREE (max depth 3, source files only) ===
+.env.example
+.github
+.github\dependabot.yml
+.github\workflows
+.github\workflows\ci.yml
+.github\workflows\release.yml
+.gitignore
+AGENTS.md
+CONTRIBUTING.md
+docs
+docs\architecture.md
+docs\branding.md
+docs\codebase
+docs\codebase\.codebase-scan.txt
+docs\codebase\ARCHITECTURE.md
+docs\codebase\CONCERNS.md
+docs\codebase\CONVENTIONS.md
+docs\codebase\INTEGRATIONS.md
+docs\codebase\REVIEW.md
+docs\codebase\STACK.md
+docs\codebase\STRUCTURE.md
+docs\codebase\TESTING.md
+docs\decisions.md
+docs\design-system.md
+docs\product.md
+docs\roadmap.md
+downloads
+downloads\Aleyo Alege (Patho Song).opus
+downloads\Annthamma Jodetthu Kano.opus
+downloads\Beladingalu Lyrical Video ｜ Love Mocktail-3 ｜ Darling Krishna ｜ Vijay Prakash ｜ Nakul Abhaynkar.opus
+downloads\Bonding Song (From ＂777 Charlie - Kannada＂).opus
+downloads\Chogada (From ＂Loveyatri＂).opus
+downloads\DANKS ANTHEM (SU FROM SO MOVIE) KANNADA DJ SONG MIX BY DJ SURSH SP.mp3
+downloads\Ellellu Oduva Manase (From ＂Sidlingu＂).opus
+downloads\En Kadhal Solla.opus
+downloads\Jamal (Extended Mix).wav
+downloads\Maatanaadi Maayavade.opus
+downloads\Marete Hodenu (Unplugged).opus
+downloads\Muddagi Neenu.opus
+downloads\Mukunda Murari.opus
+downloads\Naa Naguva Odaleny.opus
+downloads\Naane Neenanthe.opus
+downloads\Nana Mele Nanageega - Video Song ｜ Arjun Janya ｜ Sonu Nigam ｜ Kusha G C ｜ @sgkorall.opus
+downloads\Neenondu Mugiyada Mouna.opus
+downloads\Neeralli Sanna-F.opus
+downloads\Ninadene Januma (From ＂Love Mocktail 2＂).opus
+downloads\Preethse Anta Prana Tinno Lofi Version ｜ Excuse Me｜ Lyrical ｜ Kannada Reverb - Lofi Songs.opus
+downloads\Prema Baraha Remix.opus
+downloads\Scooter Song (From ＂Su From So＂).opus
+downloads\Seereli Hudugeena.opus
+downloads\Shivani.opus
+downloads\Yaakinge 2 (feat. Arvind KP, Divya Urduga, Raghu Vine store).opus
+downloads\Yeh Raaten Yeh Mausam - Lofi.opus
+eslint.config.js
+graphify-out
+graphify-out\.graphify_labels.json
+graphify-out\.graphify_labels.json.sig
+graphify-out\.graphify_root
+graphify-out\2026-09-14
+graphify-out\2026-09-14\.graphify_labels.json
+graphify-out\2026-09-14\graph.json
+graphify-out\2026-09-14\GRAPH_REPORT.md
+graphify-out\2026-09-14\manifest.json
+graphify-out\2026-09-16
+graphify-out\2026-09-16\.graphify_labels.json
+graphify-out\2026-09-16\graph.json
+graphify-out\2026-09-16\GRAPH_REPORT.md
+graphify-out\2026-09-16\manifest.json
+graphify-out\cache
+graphify-out\cache\ast
+graphify-out\cache\ast\v0.9.55-s2
+graphify-out\cache\stat-index.json
+graphify-out\graph.html
+graphify-out\graph.json
+graphify-out\GRAPH_REPORT.md
+graphify-out\manifest.json
+graphify-out\needs_update
+graphify-out\scratch
+index.html
+LICENSE
+logs
+logs\ytdl_pro_20260912.log
+logs\ytdl_pro_20260913.log
+logs\ytdl_pro_20260914.log
+logs\ytdl_pro_20260916.log
+logs\ytdl_pro_20261010.log
+logs\ytdl_pro_20261011.log
+package-lock.json
+package.json
+plans
+plans\001-ci-run-frontend-tests.md
+plans\002-nondestructive-smoke-tests.md
+plans\003-frontend-url-regex-parity.md
+plans\004-release-archive-excludes-node-modules.md
+plans\005-add-eslint.md
+plans\006-ws-reconnect-reconciliation.md
+plans\README.md
+postcss.config.js
+public
+public\branding
+public\branding\ytdl-flow-icon.svg
+python-engine
+python-engine\.pytest_cache
+python-engine\.pytest_cache\.gitignore
+python-engine\.pytest_cache\CACHEDIR.TAG
+python-engine\.pytest_cache\README.md
+python-engine\.pytest_cache\v
+python-engine\.pytest_cache\v\cache
+python-engine\engine.py
+python-engine\helpers.py
+python-engine\ipc_main.py
+python-engine\logger.py
+python-engine\requirements-dev.txt
+python-engine\requirements.lock
+python-engine\requirements.txt
+python-engine\tests
+python-engine\tests\test_engine.py
+python-engine\tests\test_ipc.py
+python-engine\tests\test_ipc_guard.py
+python-engine\tests\test_metadata.py
+python-engine\tests\test_round2_pins.py
+python-engine\tests\test_round3_pins.py
+README.md
+references
+references\architecture
+references\architecture\README.md
+references\branding
+references\branding\README.md
+references\branding\ytdl-flow-logo.svg
+references\prompts
+references\prompts\README.md
+references\ui
+references\ui\README.md
+scripts
+scripts\dev-all.mjs
+src
+src\api
+src\api\transport.test.ts
+src\api\transport.ts
+src\App.test.tsx
+src\App.tsx
+src\components
+src\components\bugfix.test.tsx
+src\components\ConfirmDialog.tsx
+src\components\coreComponents.test.tsx
+src\components\DrawerPanel.test.tsx
+src\components\DrawerPanel.tsx
+src\components\EmptyState.tsx
+src\components\ErrorBoundary.tsx
+src\components\FormatQualitySelects.tsx
+src\components\Layout.tsx
+src\components\LogPanel.test.tsx
+src\components\LogPanel.tsx
+src\components\MetadataPanel.tsx
+src\components\ModeToggle.tsx
+src\components\ProbeCard.tsx
+src\components\SidebarItem.tsx
+src\components\ToastContainer.test.tsx
+src\components\ToastContainer.tsx
+src\components\UrlInput.tsx
+src\components\urlRegex.ts
+src\components\WaveformProgress.tsx
+src\hooks
+src\hooks\useEngineEvents.test.ts
+src\hooks\useEngineEvents.ts
+src\main.tsx
+src\stores
+src\stores\downloadStore.test.ts
+src\stores\downloadStore.ts
+src\styles.css
+src\test
+src\test\setup.ts
+src\types.ts
+src\urlRegex.test.ts
+src\utils.test.ts
+src\utils.ts
+test-smoke.mjs
+tsconfig.json
+vite.config.ts
+web
+web\config.mjs
+web\data
+web\data\history.json
+web\eventBus.mjs
+web\middleware
+web\middleware\requestLog.mjs
+web\middleware\security.mjs
+web\middleware\static.mjs
+web\package-lock.json
+web\package.json
+web\routes
+web\routes\download.mjs
+web\routes\history.mjs
+web\routes\probe.mjs
+web\routes\restart.mjs
+web\routes\status.mjs
+web\server.mjs
+web\services
+web\services\engineManager.mjs
+web\services\historyPersistence.mjs
+
+=== STACK DETECTION (manifest files) ===
+
+--- package-lock.json ---
+{
+  "name": "ytdl_modern",
+  "version": "0.1.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "ytdl_modern",
+      "version": "0.1.0",
+      "license": "MIT",
+      "dependencies": {
+        "@fontsource/jetbrains-mono": "^5.3.0",
+        "@fontsource/sora": "^5.2.8",
+        "lucide-react": "^1.45.0",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "zustand": "^5.0.14"
+      },
+      "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@tailwindcss/postcss": "^4.3.2",
+        "@testing-library/jest-dom": "^7.0.1",
+        "@testing-library/react": "^16.3.2",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^5.0.0",
+        "autoprefixer": "^10.5.2",
+        "eslint": "^10.9.1",
+        "eslint-plugin-react-hooks": "^7.1.1",
+        "globals": "^17.11.0",
+        "jsdom": "^30.0.1",
+        "postcss": "^8.5.16",
+        "tailwindcss": "^4.3.2",
+        "typescript": "~5.6.2",
+        "typescript-eslint": "^8.69.0",
+        "vite": "^6.0.3",
+        "vitest": "^3.2.7"
+      },
+      "engines": {
+        "node": ">=18"
+      }
+    },
+    "node_modules/@adobe/css-tools": {
+      "version": "4.5.0",
+      "resolved": "https://registry.npmjs.org/@adobe/css-tools/-/css-tools-4.5.0.tgz",
+      "integrity": "sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==",
+      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@alloc/quick-lru": {
+      "version": "5.2.0",
+      "resolved": "https://registry.npmjs.org/@alloc/quick-lru/-/quick-lru-5.2.0.tgz",
+      "integrity": "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==",
+      "dev": true,
+      "license": "MIT",
+      "engines": {
+        "node": ">=10"
+      },
+      "funding": {
+        "url": "https://github.com/sponsors/sindresorhus"
+      }
+    },
+    "node_modules/@asamuzakjp/css-color": {
+      "version": "6.0.7",
+      "resolved": "https://registry.npmjs.org/@asamuzakjp/css-color/-/css-color-6.0.7.tgz",
+      "integrity": "sha512-vC/bk1Lz7Tn/EfU9/apOTBk80/8dyGyWMowPoV1tJ52muDGsDqt2HPT2klrFUiY60MQmQv9q8yIht15JnBgDGw==",
+      "dev": true,
+      "license": "MIT",
+      "dependencies": {
+        "@csstools/css-calc": "^3.3.0",
+        "@csstools/css-color-parser": "^4.1.10",
+        "@csstools/css-parser-algorithms": "^4.0.0",
+        "@csstools/css-tokenizer": "^4.0.0",
+        "lru-cache": "^11.5.2"
+      },
+      "engines": {
+        "node": "^22.13.0 || >=24.0.0"
+      }
+    },
+    "node_modules/@asamuzakjp/css-color/node_modules/lru-cache": {
+
+[TRUNCATED] Showing first 80 of 5076 lines.
+--- package.json ---
+{
+  "name": "ytdl_modern",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:all": "node scripts/dev-all.mjs",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "server": "cd web && node server.mjs",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:smoke": "node test-smoke.mjs"
+  },
+  "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/sora": "^5.2.8",
+    "lucide-react": "^1.45.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/postcss": "^4.3.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.5.2",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
+    "jsdom": "^30.0.1",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
+    "typescript": "~5.6.2",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^6.0.3",
+    "vitest": "^3.2.7"
+  }
+}
+
+
+=== ENTRY POINTS ===
+No common entry points found. Check 'main' or 'scripts.start' in manifest files above.
+
+=== LINTING AND FORMATTING CONFIG ===
+Found: eslint.config.js
+Found: tsconfig.json
+
+=== ENVIRONMENT VARIABLE TEMPLATES ===
+--- .env.example ---
+# YTDL Flow — Environment Variables
+# Copy this file to `.env` and adjust values as needed.
+# All variables are optional; defaults are shown in parentheses.
+
+# ── Server ────────────────────────────────────────────────────────────────────
+# HTTP server port (1-65535)
+# PORT=3000
+
+# HTTP server bind address (default: 127.0.0.1 — loopback only)
+# WARNING: Changing this to a LAN IP will cause the Host allowlist to reject
+# all requests (DNS rebinding protection). The server is designed for localhost.
+# HOST=127.0.0.1
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+# Directory for history.json and other persistent data (default: web/data)
+# Override for testing to avoid clobbering real history.
+# YTDL_DATA_DIR=
+
+# ── Engine ────────────────────────────────────────────────────────────────────
+# Python executable used to spawn the engine (default: python from PATH)
+# Point this to a venv interpreter to control dependency resolution.
+# PYTHON=python
+
+# Upper bound on queued engine commands when the engine is unavailable (min: 1)
+# ENGINE_MAX_PENDING=100
+
+# FFmpeg binary locations — the engine searches these if ffmpeg isn't on PATH.
+# FFMPEG_PATH=/path/to/ffmpeg/bin
+# FFMPEG_HOME=/path/to/ffmpeg
+# DENO_PATH=/path/to/deno
+
+# ── YouTube bot-check bypass ──────────────────────────────────────────────────
+# YouTube flags rapid anonymous downloads with "Sign in to confirm you're not
+# a bot". Authenticated cookies from a signed-in browser clear the check.
+# Use a THROWAWAY YouTube account (automated use risks bans), export cookies
+# in Netscape cookies.txt format (browser extension like "Get cookies.txt"),
+# then point the engine at it:
+# YTDL_COOKIES_FILE=C:\path\to\cookies.txt
+# Alternative (reads directly from the local browser profile — no file):
+# YTDL_COOKIES_BROWSER=chrome
+# Either one is picked up at server start (engine restart required).
+
+# ── Testing / CI ──────────────────────────────────────────────────────────────
+# Allow the smoke test to clear history (default: unset — destructive ops skip)
+# YTDL_SMOKE_ALLOW_CLEAR=1
+
+# Enable integration tests in the smoke test (default: unset)
+# YTDL_INTEGRATION=1
+
+# URL used for the smoke test's live probe/download (default: a public domain video)
+# YTDL_TEST_URL=https://www.youtube.com/watch?v=dQw4w9WgXcQ
+
+
+=== TODO / FIXME / HACK (production code only, test dirs excluded) ===
+graphify-out\graph.json:9353: "label": "TODO.md",
+graphify-out\graph.json:9360: "source_file": "web/TODO.md",
+graphify-out\graph.json:9372: "source_file": "web/TODO.md",
+graphify-out\graph.json:9384: "source_file": "web/TODO.md",
+graphify-out\graph.json:9396: "source_file": "web/TODO.md",
+graphify-out\graph.json:9408: "source_file": "web/TODO.md",
+graphify-out\graph.json:9420: "source_file": "web/TODO.md",
+graphify-out\graph.json:9432: "source_file": "web/TODO.md",
+graphify-out\graph.json:9444: "source_file": "web/TODO.md",
+graphify-out\graph.json:26885: "source_file": "web/TODO.md",
+graphify-out\graph.json:26896: "source_file": "web/TODO.md",
+graphify-out\graph.json:26907: "source_file": "web/TODO.md",
+graphify-out\graph.json:26918: "source_file": "web/TODO.md",
+graphify-out\graph.json:26929: "source_file": "web/TODO.md",
+graphify-out\graph.json:26940: "source_file": "web/TODO.md",
+graphify-out\graph.json:26951: "source_file": "web/TODO.md",
+graphify-out\manifest.json:692: "web/TODO.md": {
+graphify-out\2026-09-14\graph.json:9184: "label": "TODO.md",
+graphify-out\2026-09-14\graph.json:9191: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9203: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9215: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9227: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9239: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9251: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9263: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:9275: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26770: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26781: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26792: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26803: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26814: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26825: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\graph.json:26836: "source_file": "web/TODO.md",
+graphify-out\2026-09-14\manifest.json:698: "web/TODO.md": {
+graphify-out\2026-09-16\graph.json:9353: "label": "TODO.md",
+graphify-out\2026-09-16\graph.json:9360: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9372: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9384: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9396: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9408: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9420: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9432: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:9444: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26885: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26896: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26907: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26918: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26929: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26940: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\graph.json:26951: "source_file": "web/TODO.md",
+graphify-out\2026-09-16\manifest.json:692: "web/TODO.md": {
+graphify-out\cache\stat-index.json:1: {".github/dependabot.yml":{"size":563,"mtime_ns":1789216538089785000,"indexed_at_ns":1789367375693481000,"word_count":59},".github/workflows/ci.yml":{"size":6254,"mtime_ns":1789216538089785000,"indexed_at_ns":1789367375699329600,"word_count":646},".github/workflows/release.yml":{"size":3216,"mtime_ns":1789286669346225300,"indexed_at_ns":1789367375704674200,"word_count":310},"AGENTS.md":{"size":4950,"mtime_ns":1789367385369928900,"indexed_at_ns":1789367876632806200,"word_count":678,"hashes":{"agents.md":"692e9965c6f604abf1b51c806abe36789aaa20ad968a8c4a4d4e3066b0fbf6eb"}},"CONTRIBUTING.md":{"size":5086,"mtime_ns":1789287045048198200,"indexed_at_ns":1789367376916180900,"word_count":686,"hashes":{"contributing.md":"19190509599f78656f8a2cc8a16d68a3a00dc801ce9c8ef698c1fdfb1af4eb32"}},"README.md":{"size":23278,"mtime_ns":1789367382319786700,"indexed_at_ns":1789367876651606300,"word_count":2725,"hashes":{"readme.md":"592043f758f8d82d2a22b73726c121d44d058f720a861441a5f58769a09b8e76"}},"docs/architecture.md":{"size":5656,"mtime_ns":1789217205123670800,"indexed_at_ns":1789367376920850300,"word_count":680,"hashes":{"docs/architecture.md":"ad8aa7efcdc751cb3ea55beea5079cc86584a539a68c922ccf744216fb000ac0"}},"docs/branding.md":{"size":5295,"mtime_ns":1789367518330627200,"indexed_at_ns":1789367876683772400,"word_count":741,"hashes":{"docs/branding.md":"ee09709cecb0d8422ef176ccb3f0a2f283d5a955542b3dde3dc0c69f98baddd8"}},"docs/codebase/ARCHITECTURE.md":{"size":2404,"mtime_ns":1789216538096047400,"indexed_at_ns":1789367376925964300,"word_count":255,"hashes":{"docs/codebase/architecture.md":"ab3cfb6f22a06a6afada9b67155b37feac4cebbdf822ab4c8bd30b2ef14135e6"}},"docs/codebase/CONCERNS.md":{"size":15188,"mtime_ns":1789581701442853600,"indexed_at_ns":1789581755474214400,"hashes":{"docs/codebase/concerns.md":"7c9cd934afbc9dc57e0fc24a411fe8fa9515f729432bed4595d75209de1c921a"}},"docs/codebase/CONVENTIONS.md":{"size":1866,"mtime_ns":1789216538096047400,"indexed_at_ns":1789367376929250000,"word_count":233,"hashes":{"docs/codebase/conventions.md":"993a9f4dff6e597e4a6a39f747df31529d8954a32285b8a7813de0b1a7da4619"}},"docs/codebase/INTEGRATIONS.md":{"size":1554,"mtime_ns":1789216538097056000,"indexed_at_ns":1789367376931576600,"word_count":212,"hashes":{"docs/codebase/integrations.md":"e89440d497808ca39d6082d013a14085f6d6741ffe337172003dcf0f3832ed31"}},"docs/codebase/REVIEW.md":{"size":7476,"mtime_ns":1789216538097056000,"indexed_at_ns":1789367376933491000,"word_count":1068,"hashes":{"docs/codebase/review.md":"e41317c7be339bd0c0dbec1274e937b02b75cc841d7d3166415339cd668c9608"}},"docs/codebase/STACK.md":{"size":1713,"mtime_ns":1789216538098053400,"indexed_at_ns":1789367376935503000,"word_count":191,"hashes":{"docs/codebase/stack.md":"f5ce558efa9f456119883eeff383855cc281d452a93a29a3596b256928d070ae"}},"docs/codebase/STRUCTURE.md":{"size":3043,"mtime_ns":1789287048106546400,"indexed_at_ns":1789367376940353400,"word_count":336,"hashes":{"docs/codebase/structure.md":"40e1f554e2293d4c4e921446da553d100cda320f70a0d57fed6ea1d1bc0bb072"}},"docs/codebase/TESTING.md":{"size":2400,"mtime_ns":1789216538100051800,"indexed_at_ns":1789367376945998400,"word_count":329,"hashes":{"docs/codebase/testing.md":"3ecfaad25268590e7a55ad57a84d48b0b0fc1305ac6c88cbda47bae0d6a56a5b"}},"docs/decisions.md":{"size":11678,"mtime_ns":1789367643048811500,"indexed_at_ns":1789367876806832300,"word_count":1535,"hashes":{"docs/decisions.md":"ded01aff1c3cadf27c6d4a8d60f8a8841a8a08144d6167a1ee52bd0c8863ca89"}},"docs/design-system.md":{"size":4170,"mtime_ns":1789367602197853600,"indexed_at_ns":1789367876808269300,"word_count":544,"hashes":{"docs/design-system.md":"75b20d2d57cb692c1c1032ad76a706257bfa30dd675ce3f1be3ed46fd64dc267"}},"docs/product.md":{"size":4564,"mtime_ns":1789217202260791900,"indexed_at_ns":1789367376951410700,"word_count":596,"hashes":{"docs/product.md":"2bb4e39f9a084af65f15e432cd3ce3e6aaf80a7925d7bfa00a69ba4273be333b"}},"docs/roadmap.md":{"size":3494,"mtime_ns":1789367607275614700,"indexed_at_ns":1789367876823625000,"word_count":451,"hashes":{"docs/roadmap.md":"a7fe6bc53337932cef0a6dc384bd48df60f3042e329e3452ae10cdcf9195d313"}},"eslint.config.js":{"size":964,"mtime_ns":1789216538101897200,"indexed_at_ns":1789367375813414900,"word_count":87},"index.html":{"size":713,"mtime_ns":1789367334717025700,"indexed_at_ns":1789367375817526700,"word_count":65},"package.json":{"size":1451,"mtime_ns":1789285384623583300,"indexed_at_ns":1789367376877853200,"word_count":118,"hashes":{"package.json":"0f81abf3177c4941daf159b1e914748a352934af2b9aeea1b9f46072b8378bf9"}},"plans/001-ci-run-frontend-tests.md":{"size":2143,"mtime_ns":1789216538104907700,"indexed_at_ns":1789367376956218700,"word_count":336,"hashes":{"plans/001-ci-run-frontend-tests.md":"d04688451918d2f88f00d88bc911f1d073ed60ef0a106ed0861832621328c6ed"}},"plans/002-nondestructive-smoke-tests.md":{"size":4542,"mtime_ns":1789216538104907700,"indexed_at_ns":1789367376958387800,"word_count":583,"hashes":{"plans/002-nondestructive-smoke-tests.md":"345aa4df46ed5720f98a3203262cfd61c7f1a9a37d8e6b4864fd890965c6d8d9"}},"plans/003-frontend-url-regex-parity.md":{"size":6144,"mtime_ns":1789216538105908000,"indexed_at_ns":1789367376960810000,"word_count":698,"hashes":{"plans/003-frontend-url-regex-parity.md":"63b904c39a0c10f978743fd6d2d017b25f16cc37707b7df29ac5da0a1456eb4a"}},"plans/004-release-archive-excludes-node-modules.md":{"size":3876,"mtime_ns":1789216538105908000,"indexed_at_ns":1789367376962314000,"word_count":468,"hashes":{"plans/004-release-archive-excludes-node-modules.md":"7c129fe0e9c1b248406d030b4d3b58d3bd1a0a4cc1c9664ddb011cdb8128282f"}},"plans/005-add-eslint.md":{"size":3993,"mtime_ns":1789216538106907400,"indexed_at_ns":1789367376963926500,"word_count":508,"hashes":{"plans/005-add-eslint.md":"4927ea99b0d241f32e4e348fe12c611b7c251fdaa51a09fc13b28e9d076ef417"}},"plans/006-ws-reconnect-reconciliation.md":{"size":5361,"mtime_ns":1789216538106907400,"indexed_at_ns":1789367376966093900,"word_count":712,"hashes":{"plans/006-ws-reconnect-reconciliation.md":"16d095d20650137153512f70a2a0abe6bdba29091e3eb53fee2dd3b6abad248c"}},"plans/README.md":{"size":3539,"mtime_ns":1789216538107907100,"indexed_at_ns":1789367376968305500,"word_count":542,"hashes":{"plans/readme.md":"da94361a45f404f6e28a8a05b54bdbe209f464b6c34846000812687152874494"}},"postcss.config.js":{"size":98,"mtime_ns":1789216538110238900,"indexed_at_ns":1789367375884037100,"word_count":11},"public/branding/ytdl-flow-icon.svg":{"size":8481,"mtime_ns":1789367307038412900,"indexed_at_ns":1789367376041428500,"word_count":693},"python-engine/engine.py":{"size":96239,"mtime_ns":1789287096444303700,"indexed_at_ns":1789367376880301300,"word_count":8261,"hashes":{"python-engine/engine.py":"d0185de66171858394726725fe74b51ef2812a066caaf9c202a498d631ebfe10"}},"python-engine/helpers.py":{"size":3242,"mtime_ns":1789216538111908600,"indexed_at_ns":1789367376882410400,"word_count":373,"hashes":{"python-engine/helpers.py":"2adb34139b2bf3e0d2d0e0f5c02959dff0d36dd2992f423020b07fc7ae12ff4a"}},"python-engine/ipc_main.py":{"size":16113,"mtime_ns":1789216538113274200,"indexed_at_ns":1789367376884624800,"word_count":1620,"hashes":{"python-engine/ipc_main.py":"8006927db7788264e095783d3473fe1aa43555bf4d878c678351da0d296a45a1"}},"python-engine/logger.py":{"size":4912,"mtime_ns":1789216538113274200,"indexed_at_ns":1789367376888496100,"word_count":501,"hashes":{"python-engine/logger.py":"3da410fa2a6c338b5d6b8bf1ab0cd7d0e45b70aa96cbb1c28cee8f46d8047bb8"}},"python-engine/requirements-dev.txt":{"size":386,"mtime_ns":1789216538113274200,"indexed_at_ns":1789367376069552100,"word_count":57},"python-engine/requirements.txt":{"size":162,"mtime_ns":1789216538115288800,"indexed_at_ns":1789367376082535200,"word_count":17},"python-engine/tests/test_engine.py":{"size":13928,"mtime_ns":1789216538116795100,"indexed_at_ns":1789367376891069500,"word_count":1303,"hashes":{"python-engine/tests/test_engine.py":"986a9a0ee7957053a733707dd9ce967267ab97fe0000fd730fcffb8d9bb449de"}},"python-engine/tests/test_ipc.py":{"size":5300,"mtime_ns":1789216538116795100,"indexed_at_ns":1789367376893245000,"word_count":454,"hashes":{"python-engine/tests/test_ipc.py":"16170a117c16cae9469d68661c0c505b187a633abf957d44813020c874a09eff"}},"python-engine/tests/test_ipc_guard.py":{"size":4188,"mtime_ns":1789216538117803400,"indexed_at_ns":1789367376895691700,"word_count":404,"hashes":{"python-engine/tests/test_ipc_guard.py":"37ff93a42c85767de670723bccd9a7549f0b257a7d375e2d6b190d9dbcb00815"}},"python-engine/tests/test_metadata.py":{"size":11833,"mtime_ns":1789216538117803400,"indexed_at_ns":1789367376897547600,"word_count":820,"hashes":{"python-engine/tests/test_metadata.py":"af2ac4bb0b98ae2d42875a3e6cea84a0a7a79cbd36a010c15dd4a451a32b87ba"}},"python-engine/tests/test_round2_pins.py":{"size":1855,"mtime_ns":1789216538117803400,"indexed_at_ns":1789367376899915400,"word_count":185,"hashes":{"python-engine/tests/test_round2_pins.py":"701df201dd2d7c2bacbe4beaea9959e055ecc9289bffd5d2e2b7fb27e5f8a1d2"}},"python-engine/tests/test_round3_pins.py":{"size":12477,"mtime_ns":1789216538118807800,"indexed_at_ns":1789367376902635600,"word_count":1242,"hashes":{"python-engine/tests/test_round3_pins.py":"97bcc252eafeede2669562e79a07afa32f646fe38affdf982839b19257dfcc66"}},"references/architecture/README.md":{"size":1166,"mtime_ns":1789217130529295100,"indexed_at_ns":1789367376970838900,"word_count":158,"hashes":{"references/architecture/readme.md":"436ba878b1e1e728b5e4fccbfdd702c3d380cc8eecf02305fdf851b93241b1d4"}},"references/branding/README.md":{"size":1648,"mtime_ns":1789367598270800500,"indexed_at_ns":1789367876940745000,"word_count":221,"hashes":{"references/branding/readme.md":"dc4a7696179b13c4ea33c97cc8a865634922ee04ccb4919a0a146868526013e9"}},"references/branding/ytdl-flow-logo.svg":{"size":15294,"mtime_ns":1789367209652890000,"indexed_at_ns":1789367376219587600,"word_count":1299},"references/prompts/README.md":{"size":944,"mtime_ns":1789217133435255800,"indexed_at_ns":1789367376975431500,"word_count":143,"hashes":{"references/prompts/readme.md":"e8666a3e52e7c6e15d53899ce4b84ad4aceb6b6a6cfd2a1e1e3d6a07861f1bf3"}},"references/ui/README.md":{"size":1115,"mtime_ns":1789217127324054100,"indexed_at_ns":1789367376977498800,"word_count":160,"hashes":{"references/ui/readme.md":"d3f4be0c96dba761005ce387916dffe0d4257627e760b592d0207117ad0fb4fc"}},"scripts/dev-all.mjs":{"size":4132,"mtime_ns":1789216538119806900,"indexed_at_ns":1789367376233598000,"word_count":498},"src/App.tsx":{"size":6416,"mtime_ns":1789367338713930600,"indexed_at_ns":1789367376240432600,"word_count":527},"src/api/transport.test.ts":{"size":2599,"mtime_ns":1789216538120806300,"indexed_at_ns":1789367376244073200,"word_count":255},"src/api/transport.ts":{"size":9870,"mtime_ns":1789216538121807400,"indexed_at_ns":1789367376249143900,"word_count":1106},"src/components/ConfirmDialog.tsx":{"size":3621,"mtime_ns":1789216538122811700,"indexed_at_ns":1789367376251670500,"word_count":329},"src/components/DrawerPanel.test.tsx":{"size":2628,"mtime_ns":1789216538122811700,"indexed_at_ns":1789367376255882300,"word_count":257},"src/components/DrawerPanel.tsx":{"size":8438,"mtime_ns":1789216538123805600,"indexed_at_ns":1789367376259358700,"word_count":740},"src/components/EmptyState.tsx":{"size":1290,"mtime_ns":1789367341813971900,"indexed_at_ns":1789367376262854200,"word_count":115},"src/components/ErrorBoundary.tsx":{"size":2279,"mtime_ns":1789216538124802600,"indexed_at_ns":1789367376266396200,"word_count":224},"src/components/FormatQualitySelects.tsx":{"size":1544,"mtime_ns":1789216538125802300,"indexed_at_ns":1789367376269826200,"word_count":107},"src/components/Layout.tsx":{"size":249,"mtime_ns":1789216538125802300,"indexed_at_ns":1789367376274533500,"word_count":26},"src/components/LogPanel.test.tsx":{"size":2725,"mtime_ns":1789216538125802300,"indexed_at_ns":1789367376278024700,"word_count":229},"src/components/LogPanel.tsx":{"size":9428,"mtime_ns":1789216538126808300,"indexed_at_ns":1789367376281189300,"word_count":897},"src/components/MetadataPanel.tsx":{"size":8469,"mtime_ns":1789216538127805600,"indexed_at_ns":1789367376284709800,"word_count":791},"src/components/ModeToggle.tsx":{"size":2704,"mtime_ns":1789216538127805600,"indexed_at_ns":1789367376288421800,"word_count":225},"src/components/ProbeCard.tsx":{"size":6623,"mtime_ns":1789216538127805600,"indexed_at_ns":1789367376291829600,"word_count":552},"src/components/SidebarItem.tsx":{"size":6537,"mtime_ns":1789216538128807100,"indexed_at_ns":1789367376295036400,"word_count":570},"src/components/ToastContainer.test.tsx":{"size":2715,"mtime_ns":1789216538128807100,"indexed_at_ns":1789367376298170800,"word_count":246},"src/components/ToastContainer.tsx":{"size":2109,"mtime_ns":1789285663589535300,"indexed_at_ns":1789367376301266600,"word_count":193},"src/components/UrlInput.tsx":{"size":11806,"mtime_ns":1789285666131726200,"indexed_at_ns":1789367376304776300,"word_count":1090},"src/components/WaveformProgress.tsx":{"size":7728,"mtime_ns":1789216538130805400,"indexed_at_ns":1789367376308248700,"word_count":783},"src/components/bugfix.test.tsx":{"size":1775,"mtime_ns":1789216538131809800,"indexed_at_ns":1789367376312318400,"word_count":198},"src/components/coreComponents.test.tsx":{"size":3881,"mtime_ns":1789216538131809800,"indexed_at_ns":1789367376315377200,"word_count":388},"src/components/urlRegex.ts":{"size":1192,"mtime_ns":1789216538132802300,"indexed_at_ns":1789367376319545700,"word_count":138},"src/hooks/useEngineEvents.test.ts":{"size":14782,"mtime_ns":1789216538134479000,"indexed_at_ns":1789367376325454300,"word_count":1442},"src/hooks/useEngineEvents.ts":{"size":19003,"mtime_ns":1789216538134479000,"indexed_at_ns":1789367376330180100,"word_count":1868},"src/main.tsx":{"size":262,"mtime_ns":1789216538134479000,"indexed_at_ns":1789367376335063000,"word_count":22},"src/stores/downloadStore.test.ts":{"size":5997,"mtime_ns":1789216538135492400,"indexed_at_ns":1789367376340329200,"word_count":478},"src/stores/downloadStore.ts":{"size":15410,"mtime_ns":1789216538136491100,"indexed_at_ns":1789367376343677600,"word_count":1769},"src/test/setup.ts":{"size":1042,"mtime_ns":1789216538139487500,"indexed_at_ns":1789367376350293200,"word_count":127},"src/types.ts":{"size":2001,"mtime_ns":1789216538139487500,"indexed_at_ns":1789367376357339000,"word_count":228},"src/urlRegex.test.ts":{"size":2727,"mtime_ns":1789216538139487500,"indexed_at_ns":1789367376359897800,"word_count":237},"src/utils.test.ts":{"size":2679,"mtime_ns":1789216538140502100,"indexed_at_ns":1789367376364910800,"word_count":215},"src/utils.ts":{"size":1309,"mtime_ns":1789216538140502100,"indexed_at_ns":1789367376368253700,"word_count":165},"test-smoke.mjs":{"size":6204,"mtime_ns":1789216538140502100,"indexed_at_ns":1789367376376508200,"word_count":684},"tsconfig.json":{"size":1107,"mtime_ns":1789216538141499500,"indexed_at_ns":1789367376906278000,"word_count":116,"hashes":{"tsconfig.json":"383648e62438bfea1ab8b415d5bf9a1421c52493db713f0bacffb74da6cddd4d"}},"vite.config.ts":{"size":1045,"mtime_ns":1789216538142495900,"indexed_at_ns":1789367376382505500,"word_count":113},"web/TODO.md":{"size":2318,"mtime_ns":1789216538142495900,"indexed_at_ns":1789367376979711000,"word_count":299,"hashes":{"web/todo.md":"fbd6b6aaae1ab61784d358aba6967b39b119b0d99b612e680a1819b83de687dd"}},"web/config.mjs":{"size":5128,"mtime_ns":1789216538142495900,"indexed_at_ns":1789367376392292300,"word_count":578},"web/eventBus.mjs":{"size":1497,"mtime_ns":1789216538143499200,"indexed_at_ns":1789367376395751700,"word_count":182},"web/middleware/requestLog.mjs":{"size":994,"mtime_ns":1789216538144499000,"indexed_at_ns":1789367376399351500,"word_count":132},"web/middleware/security.mjs":{"size":4657,"mtime_ns":1789216538144499000,"indexed_at_ns":1789367376404155000,"word_count":555},"web/middleware/static.mjs":{"size":2349,"mtime_ns":1789217689788414900,"indexed_at_ns":1789367376409092800,"word_count":273},"web/package.json":{"size":466,"mtime_ns":1789217699753616800,"indexed_at_ns":1789367376910117800,"word_count":48,"hashes":{"web/package.json":"69056359cb40aeaf36fc5cc1381f5c124ed63d36635b09664ad842bc3cbab832"}},"web/routes/download.mjs":{"size":5081,"mtime_ns":1789216538148198800,"indexed_at_ns":1789367376415687200,"word_count":608},"web/routes/history.mjs":{"size":2211,"mtime_ns":1789216538149200200,"indexed_at_ns":1789367376419334400,"word_count":284},"web/routes/probe.mjs":{"size":927,"mtime_ns":1789216538149200200,"indexed_at_ns":1789367376425837500,"word_count":120},"web/routes/restart.mjs":{"size":507,"mtime_ns":1789216538150198100,"indexed_at_ns":1789367376429764800,"word_count":67},"web/routes/status.mjs":{"size":2097,"mtime_ns":1789287034770181400,"indexed_at_ns":1789367376432675000,"word_count":246},"web/server.mjs":{"size":13202,"mtime_ns":1789217696127895100,"indexed_at_ns":1789367376437101100,"word_count":1375},"web/services/engineManager.mjs":{"size":16906,"mtime_ns":1789216538151198700,"indexed_at_ns":1789367376441567100,"word_count":1961},"web/services/historyPersistence.mjs":{"size":1957,"mtime_ns":1789216538152199100,"indexed_at_ns":1789367376448034600,"word_count":228},"web/services/historyService.mjs":{"size":4811,"mtime_ns":1789216538152199100,"indexed_at_ns":1789367376451464200,"word_count":615},"web/tests/cancelRateLimit.test.mjs":{"size":1990,"mtime_ns":1789216538153200700,"indexed_at_ns":1789367376455237200,"word_count":232},"web/tests/config.test.mjs":{"size":2135,"mtime_ns":1789216538154207100,"indexed_at_ns":1789367376459105300,"word_count":240},"web/tests/engineManager.test.mjs":{"size":12614,"mtime_ns":1789216538154207100,"indexed_at_ns":1789367376462448500,"word_count":1515},"web/tests/historyRoutes.test.mjs":{"size":5148,"mtime_ns":1789216538155199700,"indexed_at_ns":1789367376466117700,"word_count":615},"web/tests/historyService.test.mjs":{"size":5803,"mtime_ns":1789216538155199700,"indexed_at_ns":1789367376469264500,"word_count":733},"web/tests/p0Regressions.test.mjs":{"size":8659,"mtime_ns":1789216538157193600,"indexed_at_ns":1789367376473725900,"word_count":1031},"web/tests/requestLog.test.mjs":{"size":1586,"mtime_ns":1789216538158196000,"indexed_at_ns":1789367376477315300,"word_count":173},"web/tests/routes.test.mjs":{"size":7647,"mtime_ns":1789216538159199500,"indexed_at_ns":1789367376483279900,"word_count":839},"web/tests/security.test.mjs":{"size":3114,"mtime_ns":1789216538159199500,"indexed_at_ns":1789367376488082500,"word_count":301},"web/tests/serverHistory.test.mjs":{"size":5099,"mtime_ns":1789216538160196900,"indexed_at_ns":1789367376491765700,"word_count":614},"web/tests/static.test.mjs":{"size":3412,"mtime_ns":1789216538160196900,"indexed_at_ns":1789367376494895900,"word_count":344},"web/tests/status.test.mjs":{"size":3666,"mtime_ns":1789287036626155600,"indexed_at_ns":1789367376498239500,"word_count":376},"web/tests/validate.test.mjs":{"size":6673,"mtime_ns":1789216538161198100,"indexed_at_ns":1789367376501389600,"word_count":643},"web/tests/ws-origin.test.mjs":{"size":4117,"mtime_ns":1789216538161198100,"indexed_at_ns":1789367376505869700,"word_count":431},"web/validate.d.mts":{"size":505,"mtime_ns":1789216538161198100,"indexed_at_ns":1789367376509158700,"word_count":65},"web/validate.mjs":{"size":4197,"mtime_ns":1789216538162241300,"indexed_at_ns":1789367376512340700,"word_count":550}}
+graphify-out\cache\ast\v0.9.55-s2\fbd6b6aaae1ab61784d358aba6967b39b119b0d99b612e680a1819b83de687dd.json:1: {"nodes": [{"id": "$graphify-root$_web_todo_md", "label": "TODO.md", "file_type": "document", "node_kind": "page", "source_file": "web/TODO.md", "source_location": "L1"}, {"id": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "label": "YTDL Modern \u2014 Web Conversion Plan (Modular / Feature-proof)", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L1"}, {"id": "$graphify-root$_web_todo_goal", "label": "Goal", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L3"}, {"id": "$graphify-root$_web_todo_architecture", "label": "Architecture", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L8"}, {"id": "$graphify-root$_web_todo_backend_modules_web", "label": "Backend Modules (web/)", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L17"}, {"id": "$graphify-root$_web_todo_frontend_modular_transport_abstraction", "label": "Frontend (modular transport abstraction)", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L30"}, {"id": "$graphify-root$_web_todo_build_run", "label": "Build & Run", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L36"}, {"id": "$graphify-root$_web_todo_run_it", "label": "Run It", "file_type": "document", "node_kind": "heading", "source_file": "web/TODO.md", "source_location": "L45"}], "edges": [{"source": "$graphify-root$_web_todo_md", "target": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L1", "weight": 1.0}, {"source": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "target": "$graphify-root$_web_todo_goal", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L3", "weight": 1.0}, {"source": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "target": "$graphify-root$_web_todo_architecture", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L8", "weight": 1.0}, {"source": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "target": "$graphify-root$_web_todo_backend_modules_web", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L17", "weight": 1.0}, {"source": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "target": "$graphify-root$_web_todo_frontend_modular_transport_abstraction", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L30", "weight": 1.0}, {"source": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "target": "$graphify-root$_web_todo_build_run", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L36", "weight": 1.0}, {"source": "$graphify-root$_web_todo_ytdl_modern_web_conversion_plan_modular_feature_proof", "target": "$graphify-root$_web_todo_run_it", "relation": "contains", "confidence": "EXTRACTED", "source_file": "web/TODO.md", "source_location": "L45", "weight": 1.0}], "input_tokens": 0, "output_tokens": 0}
+
+=== GIT RECENT COMMITS (last 20) ===
+91fc51e fix(csp): drop invalid IPv6 CSP sources; reject half-open trim; UI polish
+6644a4f brand: adopt owner-supplied animated SVG logo; remove raster logos; wire tile icon into app, favicon, docs
+c390345 feat(branding): real tile-emblem icon, lucide icons, complete YTDL Flow sweep
+cd643c5 readme: add authoritative logo header, docs index, and workflow tagline
+0f68114 docs: establish YTDL Flow knowledge system; rebrand user-facing surfaces
+56da3aa docs(concerns): refine N-04 scope - downloads die with the engine, so the restore gap is only a mount-time requestJobs timeout race
+7f5bc33 fix(test): make collision-retry test independent of CI ffmpeg presence
+f23f63c fix(round-4 audit): carry warnings on the wire, capture yt-dlp skip marker, id-suffix collision retry, IPv6 CSP
+7922287 Improve README with professional structure, badges, detailed sections
+2229e77 chore: remove leftover round-3 fix scripts
+6b9e90d Apply audit round 3: server-side history, queue restore, result guard, music.youtube/live URLs, probe deadline, trim wiring, honesty fixes, hygiene
+b0c2ce2 fix(lint): defer LogPanel prolonged-starting reset to a macrotask
+076b43a Apply audit round 2: remaining P2s (format validation, probe toasts, transport dispose, CSP, LICENSE), CI/release hardening, and P3 polish
+973d6ba fix(ci): run on Node 24 - jsdom 30 + undici 7 need worker_threads.markAsUncloneable
+83234c2 fix(ci): runner.temp in job-level env made whole workflow invalid
+59f016b Close remaining P2s and pin P0 regressions with tests
+65f9c9f Apply audit P0 + P1 fixes and high-value P2 quick wins
+f00f2ef fix: honest 3-state metadata verification (PASS/FAIL/N-A) across all containers
+5a9dc7a Fix WAV metadata verification: fall back to ffprobe when mutagen.wave.WAVE returns no tags
+20a2b25 feat(engine): production-grade metadata embedding and verification
+
+=== HIGH-CHURN FILES (last 90 days, top 20) ===
+  21 web/server.mjs
+  18 .github/workflows/ci.yml
+  17 python-engine/engine.py
+  16 README.md
+  15 package.json
+  15 src/stores/downloadStore.ts
+  14 src/components/UrlInput.tsx
+  14 src/hooks/useEngineEvents.ts
+  14 web/services/engineManager.mjs
+  13 python-engine/ipc_main.py
+  11 package-lock.json
+  10 src/App.tsx
+   9 src/hooks/useEngineEvents.test.ts
+   9 web/tests/engineManager.test.mjs
+   9 .gitignore
+   9 src/api/transport.ts
+   9 web/config.mjs
+   8 docs/codebase/CONCERNS.md
+   8 src/components/DrawerPanel.tsx
+   8 python-engine/tests/test_engine.py
+
+=== MONOREPO SIGNALS ===
+No monorepo signals detected.
+
+=== CODE METRICS ===
+Total files scanned: 227
+Total lines of code: 109345
+
+Files by language:
+  Other: 180
+  TypeScript/React: 22
+  TypeScript: 13
+  Python: 10
+  JavaScript: 2
+
+Top 10 largest files:
+downloads\Jamal (Extended Mix).wav: 35215.1KB
+downloads\Mukunda Murari.opus: 5693.6KB
+downloads\Maatanaadi Maayavade.opus: 5514.8KB
+downloads\En Kadhal Solla.opus: 5445.6KB
+downloads\Prema Baraha Remix.opus: 5171.3KB
+downloads\Ninadene Januma (From ＂Love Mocktail 2＂).opus: 5097.5KB
+downloads\DANKS ANTHEM (SU FROM SO MOVIE) KANNADA DJ SONG MIX BY DJ SURSH SP.mp3: 5072.9KB
+downloads\Naa Naguva Odaleny.opus: 4831.9KB
+downloads\Neeralli Sanna-F.opus: 4819.2KB
+downloads\Beladingalu Lyrical Video ｜ Love Mocktail-3 ｜ Darling Krishna ｜ Vijay Prakash ｜ Nakul Abhaynkar.opus: 4733.1KB
+
+=== CI/CD PIPELINES ===
+CI/CD: GitHub Actions
+
+=== CONTAINERS & ORCHESTRATION ===
+No containerization configs detected.
+
+=== SECURITY & COMPLIANCE ===
+No security configs detected.
+
+=== PERFORMANCE & TESTING ===
+No performance testing configs detected.
+
+=== SCAN COMPLETE ===

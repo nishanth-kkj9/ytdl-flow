@@ -1,43 +1,33 @@
 # ARCHITECTURE
 
-**Evidence: `web/server.mjs`, `web/services/engineManager.mjs`, `web/eventBus.mjs`,
-`python-engine/ipc_main.py`, `src/api/transport.ts`, `src/hooks/useEngineEvents.ts`**
+Evidence: `web/server.mjs`, `web/services/engineManager.mjs`, `web/eventBus.mjs`, `web/routes/*.mjs`, `python-engine/ipc_main.py`, `python-engine/engine.py`, `src/api/transport.ts`, `src/hooks/useEngineEvents.ts`, `src/stores/downloadStore.ts`, `docs/architecture.md`.
 
-## Layers
+## Organization: layered three-tier
+
+Strict layers, not feature folders. Browser never touches Python or YouTube; Node owns authority (validation/security/queue/history/lifecycle); Python owns media work.
 
 ```
-Browser (React SPA, localhost:5173 dev / :3000 prod)
-   │  REST /api/* (JSON, origin-checked, rate-limited)
-   ▼
-Node.js web server (web/server.mjs, Express 5)
-   ├─ routes/*          — request validation → EngineManager.sendCommand()
-   ├─ middleware/*      — security (Host allowlist, origin check, rate limit, WS verify)
-   ├─ services/engineManager.mjs — spawns + supervises the Python child;
-   │     bridges NDJSON (stdin/stdout) to an EventBus
-   └─ services/historyService.mjs — atomic JSON history writes
-   │
-   ▼  NDJSON lines ("cmd": probe|download|cancel|jobs)
-Python engine (ipc_main.py) → ThreadPoolExecutor (5 download, 2 probe workers)
-   → AudioDownloadEngine (engine.py) → yt-dlp → FFmpeg/mutagen
-   → NDJSON stdout events (progress, result, error, cancelled, download_retry…)
-   ▼  EventBus → WebSocketServer broadcast(·) → Browser
-
-Browser reconnect: onReconnect() → invoke("get_active_jobs") → GET /api/status
-  → activeJobs [id,status] → reconcile orphaned "downloading" items.
+Browser SPA → REST /api/* + one-way WS /ws → Express → NDJSON stdio → Python → yt-dlp/FFmpeg/mutagen
 ```
 
-## Key patterns
-- **EventBus decoupling:** producers emit; consumers (WS broadcaster) subscribe.
-  Adding a new event = one entry in `server.mjs` `eventTypes` allowlist.
-- **Command/job model:** REST is the only mutation path; WebSocket is strictly
-  server → client (CSWSH defense).
-- **Engine supervision:** bounded auto-restart (`config.engineMaxRestarts = 3`),
-  fatal-error state, pending-command backlog cap, `recover()` via `POST /api/engine/restart`.
-- **Security posture (defense-in-depth):**
-  - Host-header allowlist → 421 (DNS-rebinding guard) — built from `allowedHostsFor()`.
-  - Origin check + loopback-only → 403 — built from `allowedOriginsFor()` + `LOOPBACK_ORIGIN_RE`.
-  - WS upgrade `verifyClient` rejects foreign origins (same policy).
-  - `express.json({limit:"1mb"})`, URL allowlist, output-dir containment (realpath),
-    thumbnail SSRF guard (`_is_safe_thumbnail_url`), input length caps, history sanitization.
-- **Reconciliation:** `/api/status` returns `activeJobs` snapshot + `pendingCommands`
-  backlog depth; `/api/health` returns `{ok, engineReady}`.
+## Primary data flows
+
+Probe: `UrlInput → store → POST /api/probe → validate → EngineManager.sendCommand → NDJSON → ipc_main → engine.probe (15s socket, 3 retries, 60s deadline) → probe_result → EventBus → WS → useEngineEvents → store.probeInFlight=false + MetadataPanel`. Store watchdog (60 s) can pre-empt; late result self-heals (N-09).
+
+Download: `POST /api/download (format/quality/trim) → route 400s (incl. half-open trim reject) → bounded pool (max 5) → NDJSON → ThreadPoolExecutor → yt-dlp fetch + FFmpeg + mutagen tag + verify_format → progress/download_retry/result+warnings → EventBus → WS → store queue/history; historyPersistence saves server-side (dedupe by id)`.
+
+Reconnect/mount: `transport.onReconnect → GET /api/status (activeJobs) → restoreActiveJobs()` rebuilds queue; idempotent, cancelled-guarded.
+
+## Singletons / init order
+
+`server.mjs main()`: `historyService.init()` → `EventBus` → `EngineManager(bus)` → `attachHistoryPersistence` → express app + WS + routes. Single shared `bus`, `engine`, `historyService` per process. Frontend single `ws` connection + single Zustand store. No DI container; router factories take deps (`probeRouter(engine)`).
+
+## Workers / queues / events
+
+- Python: `ThreadPoolExecutor` (5 download, 2 probe workers); in-memory job map; NDJSON events (`engine_ready, probe_result, download_started, progress, download_retry, result+warnings, cancelled, error, fatal_error, engine_log`).
+- Node: bounded worker pool (max 5 concurrent), pending-command backlog cap (`ENGINE_MAX_PENDING`, default 100), bounded auto-restart (`engineMaxRestarts=3`), `recover()` emits terminal `EngineRestarted` errors for discarded pendings.
+- WS `ws` server broadcast only; every new event needs one `eventTypes` allowlist entry in `server.mjs`.
+
+## Repeated patterns
+
+Router factory (`export function xxxRouter(dep)`); EventBus pub/sub decoupling; command/job model (REST mutates, WS notifies); supervision (exit funnel clears `readyTools`, `windowsHide: true`); honest-result (warnings/verification carried end-to-end, ADR-007); reconciliation on reconnect/mount; atomic JSON writes (temp+rename) for history.

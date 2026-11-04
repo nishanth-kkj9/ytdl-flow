@@ -260,3 +260,39 @@ class TestGeneralMetadata:
         info = {"upload_date": "20260903"}
         meta = Metadata.from_info(info)
         assert meta.upload_date == "2026-09-03"
+
+
+# ── ffprobe discovery (N-06) ───────────────────────────────────────────────
+
+class TestFfprobeDiscovery:
+    def test_ffprobe_bin_prefers_path_which(self):
+        """When ffprobe resolves via PATH, the helper returns exactly that."""
+        import shutil as _shutil
+
+        from engine import _ffprobe_bin
+
+        assert _ffprobe_bin() == _shutil.which("ffprobe")
+
+    def test_ffprobe_bin_falls_back_to_ffmpeg_path(self, tmp_path, monkeypatch):
+        """FFMPEG_PATH-only setups (no PATH ffprobe) must still resolve —
+        otherwise mkv/webm verification silently downgrades to
+        extension-trust."""
+        import os as _os
+        import shutil as _shutil
+
+        import engine as eng
+
+        bindir = tmp_path / "ffmpegbin"
+        bindir.mkdir()
+        exe = ".exe" if _os.name == "nt" else ""
+        (bindir / f"ffmpeg{exe}").write_bytes(b"x")
+        (bindir / f"ffprobe{exe}").write_bytes(b"x")
+        monkeypatch.setenv("FFMPEG_PATH", str(bindir))
+        monkeypatch.setattr(_shutil, "which", lambda *a, **k: None)
+        saved = eng.AudioDownloadEngine._FFMPEG_CACHE
+        eng.AudioDownloadEngine._FFMPEG_CACHE = None
+        try:
+            assert eng._ffprobe_bin() == str(bindir / f"ffprobe{exe}")
+        finally:
+            eng.AudioDownloadEngine._FFMPEG_CACHE = saved
+            monkeypatch.delenv("FFMPEG_PATH", raising=False)

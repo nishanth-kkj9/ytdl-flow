@@ -8,9 +8,12 @@ const captured = vi.hoisted(() => ({
   reconnectHandler: null as null | (() => void),
   connectionHandler: null as null | ((state: string) => void),
   // Value returned by the mocked get_active_jobs invoke (reconnect tests).
-  activeJobs: [] as { id: string; status: string }[],
+  // Shape mirrors the engine jobs snapshot (url/fmt/quality/mode optional).
+  activeJobs: [] as { id: string; status: string; url?: string; fmt?: string; quality?: string; mode?: string }[],
   // When true, the mocked get_active_jobs invoke throws (endpoint down).
   invokeError: false,
+  // Value returned by the mocked get_status invoke (stability polling).
+  status: {} as Record<string, unknown>,
 }));
 
 vi.mock("../api/transport", () => ({
@@ -31,6 +34,10 @@ vi.mock("../api/transport", () => ({
     if (command === "get_active_jobs") {
       if (captured.invokeError) throw new Error("status endpoint down");
       return captured.activeJobs;
+    }
+    if (command === "get_status") {
+      if (captured.invokeError) throw new Error("status endpoint down");
+      return captured.status;
     }
     return {};
   }),
@@ -53,12 +60,16 @@ async function setup() {
 describe("useEngineEvents — engine status flow", () => {
   beforeEach(() => {
     captured.handler = null;
+    captured.status = {};
+    captured.invokeError = false;
     useDownloadStore.setState({
       queue: [],
       history: [],
       probeInfo: null,
       probeError: null,
       engineStatus: "starting",
+      cookieState: null,
+      botBreaker: null,
       statusMessage: "",
       logs: [],
       metadataResult: null,
@@ -182,6 +193,20 @@ describe("useEngineEvents — status message flow", () => {
     expect(useDownloadStore.getState().statusMessage).toBe("Download cancelled.");
     emit("error", { type: "error", id: "d1", error: "x" });
     expect(useDownloadStore.getState().statusMessage).toBe("Download failed.");
+  });
+
+  it("re-runs queue restore on the first engine_ready after mount (N-04)", async () => {
+    await setup();
+    // Mount-time requestJobs lost its 500ms race: engine has a job the
+    // empty queue doesn't know about. First engine_ready must restore it.
+    captured.activeJobs = [
+      { id: "late-job", status: "downloading", url: "https://youtu.be/x", fmt: "mp3", quality: "high", mode: "audio" },
+    ];
+    emit("engine_ready", { type: "engine_ready", ffmpeg: true, ffprobe: true, yt_dlp: true, mutagen: true });
+    await waitFor(() =>
+      expect(useDownloadStore.getState().queue.some((q) => q.id === "late-job")).toBe(true)
+    );
+    captured.activeJobs = [];
   });
 
   it("surfaces download_retry without flipping the item status", async () => {
@@ -398,6 +423,167 @@ describe("useEngineEvents — WS reconnect reconciliation", () => {
     emit("result", { type: "result", id: "normal", success: true, title: "Normal", filepath: "C:/dl/n.mp3", fmt: "mp3" });
     expect(useDownloadStore.getState().queue.some((q) => q.id === "normal")).toBe(false);
     expect(useDownloadStore.getState().history.some((h) => h.id === "normal")).toBe(true);
+  });
+
+  it("a late result never flips a terminal row (S-1: completed<->failed)", async () => {
+    await setup();
+    // A completed row must ignore a late failure.
+    useDownloadStore.setState({
+      queue: [{ ...makeItem("done"), status: "completed" }],
+    });
+    emit("result", { type: "result", id: "done", success: false, error: "LateBoom", fmt: "mp3" });
+    expect(useDownloadStore.getState().queue[0]?.status).toBe("completed");
+    expect(
+      useDownloadStore.getState().logs.some((l) => l.level === "warn" && l.message.includes("done"))
+    ).toBe(true);
+
+    // A failed row must ignore a late success (and gain no history entry).
+    useDownloadStore.setState({
+      queue: [{ ...makeItem("broke"), status: "failed" }],
+      history: [],
+    });
+    emit("result", { type: "result", id: "broke", success: true, title: "Late", filepath: "C:/dl/l.mp3", fmt: "mp3" });
+    const s = useDownloadStore.getState();
+    expect(s.queue[0]?.status).toBe("failed");
+    expect(s.history.some((h) => h.id === "broke")).toBe(false);
+  });
+});
+
+describe("useEngineEvents — stability polling (cookies + bot breaker)", () => {
+  beforeEach(() => {
+    captured.handler = null;
+    captured.status = {};
+    captured.invokeError = false;
+    useDownloadStore.setState({
+      queue: [],
+      engineStatus: "starting",
+      cookieState: null,
+      botBreaker: null,
+      logs: [],
+      _logSeq: 0,
+    });
+  });
+
+  it("captures cookie-auth state from engine_ready (source only)", async () => {
+    await setup();
+    emit("engine_ready", {
+      type: "engine_ready",
+      ready: true,
+      cookies: { configured: false, source: "none" },
+    });
+    expect(useDownloadStore.getState().cookieState).toEqual({
+      configured: false,
+      source: "none",
+    });
+
+    // Legacy engine without the field — previous state must survive.
+    emit("engine_ready", { type: "engine_ready", ready: true });
+    expect(useDownloadStore.getState().cookieState).toEqual({
+      configured: false,
+      source: "none",
+    });
+  });
+
+  it("applies cookies + bot_breaker from the initial status poll", async () => {
+    captured.status = {
+      cookies: { configured: true, source: "browser" },
+      bot_breaker: { open: true, consecutive_failures: 3, cooldown_seconds: 287 },
+    };
+    await setup();
+
+    await waitFor(() => {
+      expect(useDownloadStore.getState().cookieState).toEqual({
+        configured: true,
+        source: "browser",
+      });
+    });
+    const bb = useDownloadStore.getState().botBreaker;
+    expect(bb?.open).toBe(true);
+    expect(bb?.consecutive_failures).toBe(3);
+    expect(bb?.cooldown_seconds).toBe(287);
+    expect(bb?.observedAt).toBeGreaterThan(0);
+  });
+
+  it("null breaker (engine down / legacy) closes the indicator", async () => {
+    useDownloadStore.setState({
+      botBreaker: { open: true, consecutive_failures: 3, cooldown_seconds: 100, observedAt: 1 },
+      cookieState: { configured: true, source: "file" },
+    });
+    captured.status = { cookies: null, bot_breaker: null };
+    await setup();
+
+    await waitFor(() => {
+      expect(useDownloadStore.getState().botBreaker).toBeNull();
+    });
+    expect(useDownloadStore.getState().cookieState).toBeNull();
+  });
+
+  it("keeps last known state when the status endpoint is unreachable", async () => {
+    useDownloadStore.setState({
+      botBreaker: { open: true, consecutive_failures: 2, cooldown_seconds: 50, observedAt: 1 },
+    });
+    captured.invokeError = true;
+    await setup();
+
+    // Let the initial refresh attempt fail without clobbering the store.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(useDownloadStore.getState().botBreaker?.open).toBe(true);
+  });
+
+  it("an older server omitting the fields leaves state untouched", async () => {
+    useDownloadStore.setState({
+      cookieState: { configured: false, source: "none" },
+    });
+    captured.status = { engineReady: true }; // no cookies / bot_breaker keys
+    await setup();
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(useDownloadStore.getState().cookieState).toEqual({
+      configured: false,
+      source: "none",
+    });
+    expect(useDownloadStore.getState().botBreaker).toBeNull();
+  });
+
+  it("engine_crashed clears the breaker cooldown (its state dies with the engine)", async () => {
+    await setup();
+    useDownloadStore.setState({
+      botBreaker: { open: true, consecutive_failures: 3, cooldown_seconds: 300, observedAt: Date.now() },
+    });
+
+    // The breaker is module-global state INSIDE the Python process — a crash
+    // wipes it. The header must stop advertising a cooldown that no longer
+    // exists without waiting for the next status poll.
+    emit("engine_crashed", { type: "engine_crashed", exit_code: 1 });
+    expect(useDownloadStore.getState().botBreaker).toBeNull();
+  });
+
+  it("coerces malformed bot_breaker numerics to 0 (no NaN in the countdown)", async () => {
+    captured.status = {
+      bot_breaker: { open: true, consecutive_failures: "many", cooldown_seconds: "soon" },
+    };
+    await setup();
+
+    await waitFor(() => {
+      const bb = useDownloadStore.getState().botBreaker;
+      expect(bb?.open).toBe(true);
+      expect(bb?.consecutive_failures).toBe(0);
+      expect(bb?.cooldown_seconds).toBe(0);
+      expect(Number.isFinite(bb?.cooldown_seconds)).toBe(true);
+    });
+  });
+
+  it("re-polls immediately when the tab becomes visible again", async () => {
+    captured.status = { bot_breaker: { open: false } };
+    await setup();
+    await waitFor(() => expect(useDownloadStore.getState().botBreaker?.open).toBe(false));
+
+    // Breaker tripped while the tab was hidden — background-tab timer
+    // throttling would delay the next interval tick, so the visibilitychange
+    // listener must refresh without waiting 15 s.
+    captured.status = { bot_breaker: { open: true, consecutive_failures: 3, cooldown_seconds: 240 } };
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(useDownloadStore.getState().botBreaker?.cooldown_seconds).toBe(240));
   });
 });
 
