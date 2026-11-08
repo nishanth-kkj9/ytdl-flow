@@ -17,12 +17,11 @@
   <a href="https://www.ffmpeg.org/"><img src="https://img.shields.io/badge/FFmpeg-Media%20processing-007ACC?logo=ffmpeg&logoColor=white" alt="FFmpeg" /></a>
 </p>
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
-[![Node.js](https://img.shields.io/badge/Node.js-18+-green?logo=node.js)](https://nodejs.org/)
-[![Python](https://img.shields.io/badge/Python-3.9+-blue?logo=python)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![GitHub Issues](https://img.shields.io/github/issues/nishanth-kkj9/ytdl-flow)](https://github.com/nishanth-kkj9/ytdl-flow/issues)
+<p align="center">
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.6" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" /></a>
+  <a href="https://github.com/nishanth-kkj9/ytdl-flow/issues"><img src="https://img.shields.io/github/issues/nishanth-kkj9/ytdl-flow" alt="GitHub issues" /></a>
+</p>
 
 *Media discovery → format selection → queue → download → processing → verification → history/status*
 
@@ -188,9 +187,11 @@ cd web && npm install && cd ..
 **Recommended:** Use a virtual environment to keep dependencies isolated:
 
 ```bash
-python -m venv venv
-# On Windows: venv\Scripts\activate
-# On macOS/Linux: source venv/bin/activate
+python -m venv .venv
+# Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# macOS/Linux:
+source .venv/bin/activate
 pip install -r python-engine/requirements.lock
 ```
 
@@ -203,10 +204,12 @@ pip install -r python-engine/requirements.txt
 ### Step 5: (Optional) Copy Environment Config
 
 ```bash
+# macOS/Linux:
 cp .env.example .env
 ```
 
-See `.env.example` for available configuration options (e.g., custom port, data directory, log level).
+On Windows PowerShell, use `Copy-Item .env.example .env`. See
+[.env.example](.env.example) for supported options and their defaults.
 
 ---
 
@@ -219,9 +222,18 @@ See `.env.example` for available configuration options (e.g., custom port, data 
 npm run build && npm run server
 ```
 
-Visit **http://127.0.0.1:3000** in your browser.
+By default, visit **http://127.0.0.1:3000** in your browser. The server uses
+the loopback interface and port 3000 unless configured otherwise.
 
 ### Development Mode
+
+To start the backend and frontend together:
+
+```bash
+npm run dev:all
+```
+
+Or run them separately:
 
 **Terminal 1 — Backend with auto-restart:**
 ```bash
@@ -264,14 +276,16 @@ npm run test:smoke
 
 ## API Reference
 
-All endpoints are **localhost-only** (`127.0.0.1:3000`).
+The server defaults to **localhost-only** at `127.0.0.1:3000`. The port can be
+changed with `PORT`; see [.env.example](.env.example) for configuration notes.
 
 ### Health & Status
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/health` | Server liveness check; returns `{ "ok": true }` |
+| `GET` | `/api/health` | Server liveness and engine readiness (`ok`, `engineReady`) |
 | `GET` | `/api/status` | Engine readiness, tool availability, active jobs, versions, uptime |
+| `POST` | `/api/engine/restart` | Restart the engine after a fatal error |
 
 ### Probe
 
@@ -302,7 +316,7 @@ curl -X POST http://127.0.0.1:3000/api/download \
   }'
 ```
 
-**Response:** `{ "id": "download-id", ... }`
+**Response:** `{ "id": "download-id" }`
 
 Progress and result events arrive over WebSocket.
 
@@ -313,7 +327,7 @@ Progress and result events arrive over WebSocket.
 | `url` | Yes | — | Any YouTube URL (see Accepted URLs below) |
 | `mode` | No | `"audio"` | `"audio"`, `"video"` |
 | `format` | No | `"mp3"` | Audio: `mp3`, `opus`, `m4a`, `aac`, `wav` · Video: `mp4`, `webm`, `mkv` |
-| `quality` | No | `"high"` | Audio: `maximum`, `high`, `medium`, `low` · Video: `2160p`, `1080p`, `720p`, `480p`, `360p`, `high`, `medium`, `low` |
+| `quality` | No | `"high"` | Audio: `maximum`, `high`, `medium`, `low` · Video: `maximum`, `best`, `2160p`, `1080p`, `720p`, `480p`, `360p`, `high`, `medium`, `low` |
 | `id` | No | auto | Client-side tracking ID |
 | `trim_start` / `trim_end` | No | — | Trim window in seconds or `HH:MM:SS` / `MM:SS`; requires FFmpeg |
 
@@ -356,8 +370,11 @@ curl -X POST http://127.0.0.1:3000/api/download/cancel \
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/history?limit=100&offset=0` | List download history (max 200 per page) |
-| `POST` | `/api/history` | Save a history record (auto-called on success) |
+| `POST` | `/api/history` | Validate and save a history record |
 | `DELETE` | `/api/history` | Clear all history records |
+
+Successful downloads are also persisted by the server, so history does not
+depend on the browser tab remaining open.
 
 ### WebSocket Events
 
@@ -366,13 +383,15 @@ Connect to `ws://127.0.0.1:3000/ws` for real-time server-to-client events.
 | Event | Payload | Description |
 |-------|---------|-------------|
 | `engine_ready` | `{ protocol_version, ffmpeg, ffprobe, deno, yt_dlp, mutagen }` | Engine started; tool availability |
+| `engine_error` | `{ error }` | Engine startup error |
 | `probe_result` | `{ id, success, info }` | Probe completed with metadata |
 | `download_started` | `{ id, url, fmt, quality }` | Download acknowledged |
 | `progress` | `{ id, status, downloaded, total, speed, eta }` | Real-time progress |
 | `result` | `{ id, success, title, filepath, warnings }` | Download completed or failed |
 | `cancelled` | `{ id }` | Download cancelled by user |
 | `error` | `{ id, error_type, error }` | Per-request error |
-| `fatal_error` | `{ error }` | Engine crashed (non-recoverable) |
+| `download_retry` | `{ id, attempt, delay_seconds, error }` | Engine is retrying a download |
+| `fatal_error` | `{ error }` | Engine entered a fatal-error state |
 | `engine_crashed` | `{ exit_code, signal }` | Engine process exited unexpectedly |
 | `engine_log` | `{ message }` | Raw engine output (debug level) |
 
@@ -400,23 +419,22 @@ ytdl-flow/
 │   └── *.test.ts                  # Unit tests
 │
 ├── web/                           # Node.js / Express backend
-│   ├── middleware/                # Express middleware (auth, logging, CORS, etc.)
+│   ├── middleware/                # Security, request logging, static serving
 │   ├── routes/                    # REST endpoint handlers
 │   ├── services/
-│   │   ├── EngineManager.mjs      # Manages Python engine lifecycle
-│   │   ├── HistoryService.mjs     # Persists/loads download history
+│   │   ├── engineManager.mjs      # Manages Python engine lifecycle
+│   │   ├── historyService.mjs     # Persists/loads download history
 │   │   └── ...
 │   ├── eventBus.mjs               # Internal event emitter
 │   ├── server.mjs                 # Express + WebSocket bootstrap
 │   ├── config.mjs                 # Environment & config loader
-│   ├── validate.mjs               # Request validation schemas
+│   ├── validate.mjs               # Request validation helpers
 │   ├── tests/
 │   │   └── *.test.mjs             # Unit & integration tests
 │   └── package.json
 │
 ├── python-engine/                 # Python download engine
-│   ├── engine.py                  # AudioDownloadEngine class (~1500 LOC)
-│   │                              # - Handles probe, download, metadata, FFmpeg
+│   ├── engine.py                  # Probe, download, metadata, and FFmpeg work
 │   ├── ipc_main.py                # NDJSON IPC command dispatcher
 │   ├── logger.py                  # File logging with rotation
 │   ├── helpers.py                 # Sanitization, format utilities
@@ -440,7 +458,6 @@ ytdl-flow/
 ├── tsconfig.json                  # TypeScript configuration
 ├── vite.config.ts                 # Vite build configuration
 ├── postcss.config.js              # PostCSS (Tailwind) config
-├── tailwind.config.js             # Tailwind configuration
 ├── package.json                   # Root package (frontend)
 ├── .env.example                   # Environment template
 ├── README.md                      # This file
@@ -456,15 +473,14 @@ YTDL Flow implements **defense-in-depth** security controls:
 
 | Control | Implementation | Rationale |
 |---------|---------------|-----------|
-| **Localhost binding** | Binds to `127.0.0.1` only (not `0.0.0.0`) | Prevents LAN/Internet exposure |
+| **Loopback defaults** | Defaults to `127.0.0.1`; validates loopback Host headers | Keeps the intended local-only access model |
 | **Host header validation** | Rejects requests with invalid `Host` header | Blocks DNS rebinding attacks |
 | **URL allowlist** | Only `youtube.com` and `youtu.be` domains | Prevents arbitrary URL downloads |
-| **Path containment** | Resolves symlinks; verifies output path stays within `downloads/` | Prevents directory traversal |
-| **SSRF protection** | Restricts thumbnail and video URLs to YouTube CDN | Prevents SSRF attacks |
-| **TLS verification** | Certificate verification never disabled | Prevents man-in-the-middle attacks |
-| **Bounded concurrency** | Max 5 simultaneous downloads | Prevents resource exhaustion |
-| **Input validation** | Title (500 chars), uploader (256), URL (500) limits enforced | Prevents buffer overflows |
-| **JSON body limit** | Express request body capped at 1 MB | Prevents DoS attacks |
+| **Path containment** | Resolves symlinks and confines engine output to `downloads/` | Helps prevent path traversal |
+| **Thumbnail URL validation** | Restricts thumbnail fetches to known YouTube media/CDN hosts | Helps prevent server-side request forgery |
+| **Bounded work** | Limits download concurrency and queued engine commands | Reduces resource-exhaustion risk |
+| **Input validation** | Validates URLs, format options, identifiers, and metadata lengths | Rejects malformed or oversized input |
+| **JSON body limit** | Express request body capped at 1 MB | Limits oversized request bodies |
 | **Filename sanitization** | Removes Windows reserved names (CON, PRN, AUX, etc.) | Prevents Windows filesystem issues |
 
 ---
@@ -475,10 +491,10 @@ YTDL Flow implements **defense-in-depth** security controls:
 
 #### `ci.yml` (Runs on push/PR to main)
 
-1. **Frontend** — Install → Type-check (`tsc --noEmit`) → Production build
-2. **Backend** — Install → Syntax check all `.mjs` files
+1. **Frontend** — Install → Vitest → ESLint → TypeScript check → Production build
+2. **Backend** — Install → Syntax checks → `node:test` suite
 3. **Python Engine** — Install from lock file → Compile check → Import verification → pytest
-4. **Smoke Tests** — Start server → Run integration tests (health, probe, download, history, DNS rebinding)
+4. **Smoke Tests** — Start server → Check health, history, invalid-probe handling, and DNS-rebinding protection; the live integration probe is opt-in
 
 #### `release.yml` (Runs on `v*` tags)
 
@@ -490,20 +506,19 @@ YTDL Flow implements **defense-in-depth** security controls:
 
 See `.env.example` for all available options:
 
-```bash
-# Port (default: 3000)
-PORT=3000
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `PORT` | HTTP server port | `3000` |
+| `HOST` | Server bind address; keep the loopback default | `127.0.0.1` |
+| `YTDL_DATA_DIR` | Persistent history data directory (not the downloads folder) | `web/data` |
+| `PYTHON` | Python executable used to launch the engine | `python` |
+| `ENGINE_MAX_PENDING` | Maximum pending engine commands | `100` |
+| `FFMPEG_PATH`, `FFMPEG_HOME` | Optional FFmpeg locations | Auto-detected |
+| `DENO_PATH` | Optional Deno executable location | Auto-detected |
+| `YTDL_COOKIES_FILE`, `YTDL_COOKIES_BROWSER` | Optional yt-dlp cookie authentication source | Unset |
 
-# Data directory (default: ./downloads)
-YTDL_DATA_DIR=./downloads
-
-# Log level (default: info)
-LOG_LEVEL=info
-
-# FFmpeg paths (optional; auto-detected if on PATH)
-FFMPEG_PATH=/path/to/ffmpeg
-FFMPEG_HOME=/path/to/ffmpeg/home
-```
+Do not commit cookie files or other credentials. The example file documents
+the security considerations for optional YouTube authentication.
 
 ---
 
@@ -534,9 +549,11 @@ FFMPEG_HOME=/path/to/ffmpeg/home
 **Solution:**
 1. Create a fresh virtual environment:
    ```bash
-   rm -rf venv
-   python -m venv venv
-   source venv/bin/activate  # or: venv\Scripts\activate on Windows
+   python -m venv .venv
+   # Windows PowerShell:
+   .\.venv\Scripts\Activate.ps1
+   # macOS/Linux:
+   source .venv/bin/activate
    ```
 2. Install from the pinned lock file:
    ```bash
