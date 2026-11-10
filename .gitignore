@@ -9,6 +9,16 @@ coverage/
 *.tsbuildinfo
 .eslintcache
 .ruff_cache
+Desktop*/**/bin/
+Desktop*/**/obj/
+**/.vs/
+**/AppPackages/
+**/Generated Files/
+**/*.user
+**/*.userosscache
+**/*.suo
+**/*.pfx
+**/*.publish.xml
 
 # Rust build artifacts
 /test_reqwest/target/
