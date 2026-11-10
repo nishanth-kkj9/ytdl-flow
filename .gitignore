@@ -17,6 +17,7 @@ coverage/
 __pycache__
 *.pyc
 python-engine/binaries
+python-engine/build/
 .pytest_cache
 .mypy_cache
 .venv

@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
+const configuredPath = (name, fallback) =>
+  path.resolve(process.env[name] || fallback);
 
 // ── .env loading ─────────────────────────────────────────────────────────────
 // The server must run on Node >=18 (web/package.json engines), which has no
@@ -75,19 +77,42 @@ export const config = {
 
   // Paths
   projectRoot,
-  distDir: path.join(projectRoot, "dist"),
-  engineEntry: path.join(projectRoot, "python-engine", "ipc_main.py"),
-  downloadsDir: path.join(projectRoot, "downloads"),
+  distDir: configuredPath("YTDL_DIST_DIR", path.join(projectRoot, "dist")),
+  engineEntry: configuredPath(
+    "YTDL_ENGINE_ENTRY",
+    path.join(projectRoot, "python-engine", "ipc_main.py")
+  ),
+  engineExecutable: process.env.YTDL_ENGINE_EXECUTABLE || process.env.PYTHON || "python",
+  engineArgs: process.env.YTDL_ENGINE_EXECUTABLE
+    ? []
+    : [configuredPath("YTDL_ENGINE_ENTRY", path.join(projectRoot, "python-engine", "ipc_main.py"))],
+  downloadsDir: configuredPath(
+    "YTDL_DOWNLOADS_DIR",
+    path.join(projectRoot, "downloads")
+  ),
+  logsDir: configuredPath(
+    "YTDL_LOG_DIR",
+    path.join(projectRoot, "logs")
+  ),
   // Overridable so smoke tests (which DELETE history) can run against an
   // isolated scratch directory instead of the user's real web/data/history.json.
-  dataDir: process.env.YTDL_DATA_DIR || path.join(__dirname, "data"),
-  historyFile: path.join(
-    process.env.YTDL_DATA_DIR || path.join(__dirname, "data"),
-    "history.json"
+  dataDir: configuredPath(
+    "YTDL_DATA_DIR",
+    path.join(__dirname, "data")
+  ),
+  historyFile: configuredPath(
+    "YTDL_HISTORY_FILE",
+    path.join(
+      configuredPath("YTDL_DATA_DIR", path.join(__dirname, "data")),
+      "history.json"
+    )
   ),
 
   // Engine
-  engineCwd: path.join(projectRoot, "python-engine"),
+  engineCwd: configuredPath(
+    "YTDL_ENGINE_CWD",
+    path.join(projectRoot, "python-engine")
+  ),
   engineMaxRestarts: 3,
   // Upper bound on queued engine commands when the engine is unavailable.
   engineMaxPendingCommands: envInt("ENGINE_MAX_PENDING", 100, { min: 1 }),

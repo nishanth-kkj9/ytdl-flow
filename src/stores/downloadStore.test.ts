@@ -184,6 +184,25 @@ describe("downloadStore", () => {
     vi.useRealTimers();
   });
 
+  it("probeUrl clears stale watchdog timers when a probe finishes or is replaced", async () => {
+    vi.useFakeTimers();
+    invoke.mockResolvedValue({});
+
+    await useDownloadStore.getState().probeUrl("https://youtu.be/one");
+    expect(vi.getTimerCount()).toBe(1);
+
+    useDownloadStore.getState().clearProbeTimeout();
+    expect(vi.getTimerCount()).toBe(0);
+
+    await useDownloadStore.getState().probeUrl("https://youtu.be/two");
+    expect(vi.getTimerCount()).toBe(1);
+
+    useDownloadStore.getState().clearProbeTimeout();
+    expect(vi.getTimerCount()).toBe(0);
+
+    vi.useRealTimers();
+  });
+
   it("probeUrl clears probeInFlight on REST failure (F-11)", async () => {
     invoke.mockRejectedValueOnce(new Error("down"));
     await useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");

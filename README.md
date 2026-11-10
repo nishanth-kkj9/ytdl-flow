@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Local YouTube downloader for audio and video</strong><br>
-  Download MP3, MP4, and other formats from YouTube with a secure localhost web UI, queue management, metadata embedding, and real-time progress tracking.
+  Download MP3, MP4, and other formats from YouTube with a secure localhost web UI or Windows desktop app, queue management, metadata embedding, and real-time progress tracking.
 </p>
 
 <p align="center">
@@ -53,6 +53,7 @@
 YTDL Flow is a **localhost-only** YouTube downloader that runs entirely on your machine. It provides:
 
 - **Web UI** at `http://127.0.0.1:3000` for probing, downloading, and managing history
+- **Windows desktop app** with a native download-folder picker (optional)
 - **REST API** for programmatic access
 - **WebSocket** for real-time progress and status updates
 - **Concurrent downloads** (up to 5 workers) with full queue management
@@ -99,7 +100,8 @@ YTDL Flow is a **localhost-only** YouTube downloader that runs entirely on your 
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | React 19, TypeScript 5.6, Zustand, Tailwind CSS v4, Vite 6 |
-| **Backend** | Node.js 18+, Express 5.2, WebSocket (`ws` library) |
+| **Desktop host** | Electron 45 (Windows x64 installer) |
+| **Backend** | Node.js 18+ web runtime, Express 5.2, WebSocket (`ws` library) |
 | **Engine** | Python 3.9+, yt-dlp, mutagen, FFmpeg |
 | **Optional** | Deno (JS runtime for yt-dlp's age-restricted video extraction) |
 | **Testing** | Vitest (frontend), node:test (backend), pytest (Python engine) |
@@ -248,6 +250,38 @@ npm run dev
 Then visit **http://127.0.0.1:5173** (Vite dev server).
 
 The Vite dev server automatically proxies `/api`, `/downloads`, and `/ws` to the backend on port 3000.
+
+### Windows Desktop App
+
+The optional Windows x64 desktop host serves the same built React app from a
+loopback-only Node server. The NSIS installer bundles Electron and the
+PyInstaller-built Python engine. **FFmpeg/ffprobe are not bundled**; install
+FFmpeg separately and make it available on `PATH`, or configure
+`FFMPEG_PATH`/`FFMPEG_HOME`. Deno and YouTube cookies remain optional
+user-managed prerequisites.
+
+To develop or build the installer on Windows, use Node.js 24 and Python 3.11:
+
+```powershell
+npm ci
+cd web
+npm ci
+cd ..
+python -m pip install -r python-engine/requirements.lock
+python -m pip install -r python-engine/requirements-build.txt
+npm run desktop:dev
+```
+
+`npm run desktop:dev` builds the frontend and opens the desktop host. To create
+an installer instead, run `npm run desktop:dist`; the NSIS installer is written
+to `release/`. `npm run desktop:pack` creates an unpacked Windows app directory
+for packaging checks. The release workflow also builds and attaches the Windows
+installer to tagged GitHub releases.
+
+The desktop app stores settings, history, and logs in Electron's per-user data
+directory. Its header folder button opens a native directory picker; changing
+the folder is refused while the backend reports active jobs. Web mode and its
+default paths remain unchanged.
 
 ### Running Tests
 
@@ -453,6 +487,8 @@ ytdl-flow/
 │   ├── dev-all.mjs                # Orchestrate frontend + backend together
 │   └── ...
 │
+├── desktop/                       # Electron main process, preload, backend runner
+├── public/branding/                # Web icon derivative and Windows ICO
 ├── test-smoke.mjs                 # Integration smoke tests
 ├── eslint.config.js               # ESLint configuration
 ├── tsconfig.json                  # TypeScript configuration
@@ -474,9 +510,10 @@ YTDL Flow implements **defense-in-depth** security controls:
 | Control | Implementation | Rationale |
 |---------|---------------|-----------|
 | **Loopback defaults** | Defaults to `127.0.0.1`; validates loopback Host headers | Keeps the intended local-only access model |
+| **Electron isolation** | Context isolation, sandboxing, no renderer Node access, narrow preload API, trusted-frame validation | Keeps native folder selection behind the main-process boundary |
 | **Host header validation** | Rejects requests with invalid `Host` header | Blocks DNS rebinding attacks |
 | **URL allowlist** | Only `youtube.com` and `youtu.be` domains | Prevents arbitrary URL downloads |
-| **Path containment** | Resolves symlinks and confines engine output to `downloads/` | Helps prevent path traversal |
+| **Path containment** | Resolves symlinks and confines engine output to the configured download directory | Helps prevent path traversal |
 | **Thumbnail URL validation** | Restricts thumbnail fetches to known YouTube media/CDN hosts | Helps prevent server-side request forgery |
 | **Bounded work** | Limits download concurrency and queued engine commands | Reduces resource-exhaustion risk |
 | **Input validation** | Validates URLs, format options, identifiers, and metadata lengths | Rejects malformed or oversized input |
@@ -495,6 +532,7 @@ YTDL Flow implements **defense-in-depth** security controls:
 2. **Backend** — Install → Syntax checks → `node:test` suite
 3. **Python Engine** — Install from lock file → Compile check → Import verification → pytest
 4. **Smoke Tests** — Start server → Check health, history, invalid-probe handling, and DNS-rebinding protection; the live integration probe is opt-in
+5. **Tagged releases** — Build the existing web archives and a Windows x64 NSIS desktop installer
 
 #### `release.yml` (Runs on `v*` tags)
 
@@ -511,6 +549,8 @@ See `.env.example` for all available options:
 | `PORT` | HTTP server port | `3000` |
 | `HOST` | Server bind address; keep the loopback default | `127.0.0.1` |
 | `YTDL_DATA_DIR` | Persistent history data directory (not the downloads folder) | `web/data` |
+| `YTDL_DOWNLOADS_DIR` | Download destination (also used by Python path containment) | `downloads/` |
+| `YTDL_LOG_DIR` | Python engine log directory | `logs/` |
 | `PYTHON` | Python executable used to launch the engine | `python` |
 | `ENGINE_MAX_PENDING` | Maximum pending engine commands | `100` |
 | `FFMPEG_PATH`, `FFMPEG_HOME` | Optional FFmpeg locations | Auto-detected |
@@ -541,6 +581,18 @@ the security considerations for optional YouTube authentication.
 1. Check `logs/ytdl_pro_*.log` (Python file logger with daily rotation)
 2. Check the `web` server console output
 3. Use the "Restart engine" button in the live log panel (advanced diagnostics)
+
+### Windows Desktop App Cannot Start
+
+**Symptom:** The installer opens an error dialog or downloads fail in the
+desktop app.
+
+**Solution:**
+1. Confirm the installer is for 64-bit Windows.
+2. Install FFmpeg and ffprobe and verify `ffmpeg -version` works in a new
+   terminal, or set `FFMPEG_PATH`/`FFMPEG_HOME` in the Windows user environment.
+3. Check the app's `logs` folder under Electron's per-user data directory for
+   Python engine diagnostics.
 
 ### Python Dependency Conflicts
 
@@ -607,7 +659,7 @@ Beyond this README, the repository ships a documentation set maintained for huma
 | [docs/design-system.md](docs/design-system.md) | Verified design tokens (colors, typography, radii, motion) from `src/styles.css` |
 | [docs/branding.md](docs/branding.md) | Official visual identity, logo rules and usage policy |
 | [docs/roadmap.md](docs/roadmap.md) | Completed / In Progress / Planned / Ideas — evidence-based roadmap |
-| [docs/decisions.md](docs/decisions.md) | ADR-style decision log (nine verifiable decisions) |
+| [docs/decisions.md](docs/decisions.md) | ADR-style decision log for architecture and product choices |
 | [docs/codebase/](docs/codebase) | Deep technical reference: architecture, stack, structure, conventions, testing, integrations, concerns |
 | [plans/](plans/README.md) | Numbered implementation plans (001–006) with execution records |
 | [references/branding/](references/branding/README.md) | **The authoritative YTDL Flow logo** (vector SVG, source of truth) |

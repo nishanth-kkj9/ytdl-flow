@@ -23,20 +23,30 @@ import { allowedOriginsFor } from "../config.mjs";
  * @param {number} windowMs Window length in milliseconds.
  * @returns {import("express").RequestHandler}
  */
-export function rateLimit({ maxRequests, windowMs }) {
+export function rateLimit({
+  maxRequests,
+  windowMs,
+  setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval,
+}) {
   const buckets = new Map();
+  let destroyed = false;
 
   // Periodically prune stale buckets to avoid unbounded memory growth.
-  const prune = setInterval(() => {
+  const prune = setIntervalFn(() => {
+    if (destroyed) return;
     const now = Date.now();
     for (const [key, bucket] of buckets) {
       if (now - bucket.resetAt > windowMs) {
         buckets.delete(key);
       }
     }
-  }, windowMs).unref?.();
+  }, windowMs);
 
-  return (req, res, next) => {
+  const middleware = (req, res, next) => {
+    if (destroyed) {
+      return next(new Error("Rate limiter has been destroyed"));
+    }
     const key = req.ip || req.socket?.remoteAddress || "unknown";
     const now = Date.now();
     let bucket = buckets.get(key);
@@ -51,6 +61,16 @@ export function rateLimit({ maxRequests, windowMs }) {
     }
     next();
   };
+
+  middleware.destroy = () => {
+    if (destroyed) return;
+    destroyed = true;
+    clearIntervalFn(prune);
+    buckets.clear();
+  };
+
+  prune.unref?.();
+  return middleware;
 }
 
 // ── Origin check ─────────────────────────────────────────────────────────────

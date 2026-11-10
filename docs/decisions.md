@@ -292,3 +292,35 @@ Safari/iOS touch-icon support is limited; if parity is ever required,
 generate raster exports from the SVG at build time (tracked in
 `docs/roadmap.md` Ideas).
 
+---
+
+## ADR-012 — Electron desktop host reuses the localhost application
+
+### Context
+The project needs a Windows desktop experience without creating a second UI,
+backend, or media pipeline. The existing React app already communicates with
+Node over same-origin REST and WebSocket contracts.
+
+### Decision
+- Keep the web app as the primary runtime and add Electron as an optional
+  Windows x64 host for the same built frontend and `startServer()` backend.
+- Run the backend in an Electron utility process, bind it to loopback on an
+  OS-selected port, and wait for its health check before loading the UI.
+- Keep renderer Node access disabled. Expose only the native download-folder
+  picker through a context-isolated preload and validate its sender in the
+  main process.
+- Store desktop settings, history, and logs in Electron user data. Package the
+  Python engine as a PyInstaller sidecar, but require users to install
+  FFmpeg/ffprobe separately until a compatible distribution/license decision
+  is made.
+
+### Reason
+Reusing the existing application preserves API, WebSocket, and engine
+contracts and keeps browser mode working. The narrow native bridge avoids
+introducing Electron privileges into the React app.
+
+### Consequences
+Desktop lifecycle and packaging must be verified independently from web CI.
+Users of the installer need FFmpeg/ffprobe available on their machine. The
+Windows installer is not considered verified until a packaged app has been
+built and installed in a clean environment.

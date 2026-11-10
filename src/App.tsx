@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { PanelRight } from "lucide-react";
+import { FolderOpen, PanelRight } from "lucide-react";
+import { invoke } from "./api/transport";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Layout } from "./components/Layout";
 import { DrawerPanel } from "./components/DrawerPanel";
@@ -24,6 +25,9 @@ function App() {
   const wsConnected = useDownloadStore((state) => state.wsConnected);
   const cookieState = useDownloadStore((state) => state.cookieState);
   const botBreaker = useDownloadStore((state) => state.botBreaker);
+  const addToast = useDownloadStore((state) => state.addToast);
+  const [downloadDir, setDownloadDir] = useState("");
+  const [changingDownloadDir, setChangingDownloadDir] = useState(false);
 
   // ── Bot-check cooldown countdown ──────────────────────────────────────────
   // The server reports cooldown_seconds only on each /api/status poll; tick
@@ -70,6 +74,21 @@ function App() {
   }, [loadHistory, restoreActiveJobs]);
 
   useEffect(() => {
+    if (!window.ytdlDesktop) return;
+    let active = true;
+    invoke<string>("get_download_dir")
+      .then((directory) => {
+        if (active) setDownloadDir(directory);
+      })
+      .catch((error: unknown) => {
+        console.error("[app] Could not load the download directory:", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "b") {
         e.preventDefault();
@@ -86,6 +105,26 @@ function App() {
   const engineDot =
     engineStatus === "ready" ? "bg-success" :
     engineStatus === "starting" ? "bg-warning animate-pulse" : "bg-error";
+
+  const chooseDownloadDirectory = async () => {
+    if (!window.ytdlDesktop) return;
+    setChangingDownloadDir(true);
+    try {
+      const result = await window.ytdlDesktop.chooseDownloadDirectory();
+      if (result.status === "updated" && result.path) {
+        setDownloadDir(result.path);
+        addToast("Download folder updated.", "success");
+      } else if (result.status === "blocked" && result.message) {
+        addToast(result.message, "warning", 0);
+      } else if (result.status === "unchanged" && result.path) {
+        setDownloadDir(result.path);
+      }
+    } catch (error) {
+      addToast(`Could not change download folder: ${String(error)}`, "error", 0);
+    } finally {
+      setChangingDownloadDir(false);
+    }
+  };
 
   return (
     <>
@@ -153,6 +192,25 @@ function App() {
                   <span className={`tag ${selectedMode === "audio" ? "tag-audio" : "tag-video"}`}>
                     {selectedMode === "audio" ? "Audio" : "Video"}
                   </span>
+                  {window.ytdlDesktop && (
+                    <button
+                      type="button"
+                      aria-label="Choose download folder"
+                      aria-busy={changingDownloadDir}
+                      disabled={changingDownloadDir || totalQueued > 0 || engineStatus !== "ready"}
+                      title={
+                        totalQueued > 0
+                          ? "Finish or cancel active downloads before changing the folder."
+                          : engineStatus !== "ready"
+                            ? "Wait for the engine to be ready before changing the folder."
+                          : `Download folder: ${downloadDir || "loading"}`
+                      }
+                      onClick={() => void chooseDownloadDirectory()}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition hover:bg-raised hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <FolderOpen className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     ref={drawerTriggerRef}

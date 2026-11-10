@@ -23,6 +23,15 @@ export interface LogEntry {
   refId?: string;
 }
 
+let activeProbeTimeout: ReturnType<typeof setTimeout> | undefined;
+
+function clearProbeTimeout(): void {
+  if (activeProbeTimeout !== undefined) {
+    clearTimeout(activeProbeTimeout);
+    activeProbeTimeout = undefined;
+  }
+}
+
 export type LogLevel = LogEntry["level"];
 
 /** Extracts a download UUID from a log message if present (for correlation). */
@@ -104,6 +113,7 @@ interface DownloadState {
   ) => void;
   setStatusMessage: (message: string) => void;
   setMetadataResult: (result: MetadataResult | null) => void;
+  clearProbeTimeout: () => void;
   addLog: (message: string, level?: "info" | "warn" | "error") => void;
   clearLogs: () => void;
   setWsConnected: (connected: boolean) => void;
@@ -258,11 +268,13 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   },
 
   probeUrl: async (url) => {
+    clearProbeTimeout();
     set({ statusMessage: "Probing URL...", probeInfo: null, probeError: null, probeInFlight: true });
     try {
       await invoke("probe_url", { url });
       get().addLog(`Probe requested: ${url}`);
     } catch (error) {
+      clearProbeTimeout();
       set({ statusMessage: "Probe failed.", probeError: String(error), probeInFlight: false });
       get().addLog(`probe_url error: ${String(error)}`, "error");
       return;
@@ -271,7 +283,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
     // Bind the spinner to the actual probe lifecycle (cleared by the WS
     // handlers in useEngineEvents), and never let a lost event leave it
     // spinning forever — a 60 s watchdog clears it with an honest message.
-    setTimeout(() => {
+    activeProbeTimeout = setTimeout(() => {
       if (useDownloadStore.getState().probeInFlight) {
         useDownloadStore.setState({
           probeInFlight: false,
@@ -279,6 +291,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
           statusMessage: "Probe timed out.",
         });
       }
+      activeProbeTimeout = undefined;
     }, 60_000);
   },
 
@@ -298,6 +311,9 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
     }),
   setStatusMessage: (statusMessage) => set({ statusMessage }),
   setMetadataResult: (result) => set({ metadataResult: result }),
+  clearProbeTimeout: () => {
+    clearProbeTimeout();
+  },
   addLog: (message, level = "info") => set((state) => {
     // Drop exact duplicates of the most recent entry. React StrictMode mounts
     // effects twice in development, so every engine event used to be handled

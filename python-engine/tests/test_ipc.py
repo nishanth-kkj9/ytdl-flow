@@ -42,6 +42,35 @@ def test_default_resolves_to_downloads():
     assert _resolve_output_dir("") == _BASE
 
 
+def test_configured_download_root_allows_only_paths_beneath_it(tmp_path, monkeypatch):
+    root = tmp_path / "chosen-downloads"
+    nested = root / "nested"
+    outside = tmp_path / "outside"
+    nested.mkdir(parents=True)
+    outside.mkdir()
+    monkeypatch.setenv("YTDL_DOWNLOADS_DIR", str(root))
+
+    assert _resolve_output_dir("") == os.path.realpath(root)
+    assert _resolve_output_dir(str(nested)) == os.path.realpath(nested)
+    assert _resolve_output_dir(str(outside)) is None
+
+
+def test_configured_download_root_still_rejects_symlink_escape(tmp_path, monkeypatch):
+    root = tmp_path / "chosen-downloads"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = root / "escape"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        import pytest
+        pytest.skip("directory symlinks are unavailable")
+    monkeypatch.setenv("YTDL_DOWNLOADS_DIR", str(root))
+
+    assert _resolve_output_dir(str(link)) is None
+
+
 # ── `jobs` command (WS-reconnect reconciliation snapshot) ─────────────────────
 
 def _capture_jobs_reply(command: dict) -> dict:

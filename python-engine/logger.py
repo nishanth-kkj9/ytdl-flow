@@ -55,9 +55,10 @@ def _get_log_path() -> str:
     global _log_path, _log_date
     date_tag = datetime.now().strftime("%Y%m%d")
     if _log_path is None or _log_date != date_tag:
-        # logs/ folder sits next to run.py — re-evaluate on date change (REL-02)
+        # Re-evaluate the configured log folder on date change (REL-02).
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        logs_dir = os.path.join(project_root, "logs")
+        logs_dir = os.environ.get("YTDL_LOG_DIR") or os.path.join(project_root, "logs")
+        logs_dir = os.path.abspath(logs_dir)
         os.makedirs(logs_dir, exist_ok=True)
         _log_date = date_tag
         _log_path = os.path.join(logs_dir, f"ytdl_pro_{date_tag}.log")
@@ -153,4 +154,3 @@ def log_format_verify(filepath: str, expected: str, actual: str, ok: bool) -> No
     else:
         warn(f"FORMAT MISMATCH: expected={expected.upper()} actual={actual.upper()} "
              f"file={os.path.basename(filepath)}")
-

@@ -31,3 +31,57 @@ test("budgets: probe 10/10s, download 5/10s, restart 5/10s, cancel 21/10s", asyn
     assert.ok(retryAfter && Number(retryAfter) > 0, "first 429 must carry numeric Retry-After");
   }
 });
+
+test("rateLimit exposes a shutdown hook so pruning timers do not outlive the server lifecycle", () => {
+  const limiter = rateLimit({ maxRequests: 2, windowMs: 30000 });
+  assert.equal(typeof limiter.destroy, "function");
+  assert.doesNotThrow(() => limiter.destroy());
+});
+
+test("repeated limiter initialization and destruction releases every pruning timer", () => {
+  const activeTimers = new Set();
+  let createdTimers = 0;
+  let clearedTimers = 0;
+  const setIntervalFn = (callback) => {
+    const timer = { callback, unref() {} };
+    activeTimers.add(timer);
+    createdTimers += 1;
+    return timer;
+  };
+  const clearIntervalFn = (timer) => {
+    if (activeTimers.delete(timer)) clearedTimers += 1;
+  };
+
+  for (let cycle = 0; cycle < 20; cycle += 1) {
+    const limiter = rateLimit({
+      maxRequests: 2,
+      windowMs: 30_000,
+      setIntervalFn,
+      clearIntervalFn,
+    });
+    assert.equal(activeTimers.size, 1, `cycle ${cycle} should own one timer`);
+    limiter.destroy();
+    limiter.destroy();
+    assert.equal(activeTimers.size, 0, `cycle ${cycle} should release its timer`);
+  }
+
+  assert.equal(createdTimers, 20);
+  assert.equal(clearedTimers, 20);
+});
+
+test("a destroyed rate limiter rejects further requests", () => {
+  const limiter = rateLimit({
+    maxRequests: 2,
+    windowMs: 30_000,
+    setIntervalFn: () => ({ unref() {} }),
+    clearIntervalFn() {},
+  });
+  limiter.destroy();
+
+  let receivedError;
+  limiter({}, {}, (error) => {
+    receivedError = error;
+  });
+
+  assert.match(receivedError?.message ?? "", /destroyed/);
+});

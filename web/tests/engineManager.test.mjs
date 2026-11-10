@@ -314,6 +314,7 @@ function collect(bus, event) {
   mgr.ready = false;
   mgr.sendCommand({ cmd: "download", id: "q-1", url: "https://example.com" });
   mgr.sendCommand({ cmd: "download", id: "q-2", url: "https://example.com" });
+  mgr.activeDownloadIds.add("running-1");
   assert.strictEqual(mgr.pendingCommands.length, 2);
 
   const errors = collect(bus, "error");
@@ -329,6 +330,9 @@ function collect(bus, event) {
   assert.ok(e2, "q-2 should get a terminal error");
   assert.strictEqual(e1.error_type, "EngineRestarted");
   assert.strictEqual(e2.error_type, "EngineRestarted");
+  assert.ok(errors.some((e) => e.id === "running-1"), "running downloads should get a terminal error on restart");
+  assert.strictEqual(errors.filter((e) => e.id === "q-1").length, 1, "queued downloads should not get duplicate errors");
+  assert.strictEqual(mgr.activeDownloadIds.size, 0, "restart should release every tracked download id");
   console.log("✓ recover() emits terminal errors for discarded pending commands");
 }
 

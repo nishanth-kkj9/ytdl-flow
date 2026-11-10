@@ -68,6 +68,7 @@ background with soft lighting and a faint grain texture. It consists of:
 | Navigation / drawer | Prefer the tile-emblem derivative at small sizes; keep clear space around it. |
 | Landing / no-build placeholder page | Full logo or emblem; must sit on a dark background consistent with `#08080D`. |
 | Favicon | `public/branding/ytdl-flow-icon.svg` (tile emblem, transparent background) wired as `<link rel="icon" type="image/svg+xml">` and `apple-touch-icon` in `index.html`. |
+| Windows desktop icon | `public/branding/ytdl-flow-icon.ico`, a static rasterization of the approved tile derivative for Windows native window/taskbar APIs; the original SVG remains the web and branding source of truth. |
 | Documentation | Reference the canonical path `references/branding/ytdl-flow-logo.svg`; do not duplicate the file. |
 | README | Embeds the logo at the top directly from `references/branding/ytdl-flow-logo.svg`; never move the original. |
 
@@ -79,15 +80,18 @@ transparent background, wordmark and scene removed, all tile gradients,
 filters, and animations reused verbatim) is used. The reference file is never
 modified or replaced by the derivative.
 
-Note: raster exports (PNG/ICO) are intentionally not maintained. Safari/iOS
-support for SVG touch icons is limited; if touch-icon parity is ever needed,
-generate a PNG from the SVG at build time (tracked in `docs/roadmap.md` Ideas).
+Raster exports are not used in the web UI. The Windows `.ico` is maintained
+only because the native Windows app icon requires that format; it is a
+technical derivative, not a replacement for the SVG. Safari/iOS support for
+SVG touch icons is limited; if touch-icon parity is ever needed, generate a
+PNG from the SVG at build time (tracked in `docs/roadmap.md` Ideas).
 
 ## Production assets (current)
 
 | Asset | Path | Provenance |
 |-------|------|------------|
 | Tile-emblem icon (SVG) | `public/branding/ytdl-flow-icon.svg` | Tile-only crop of the authoritative logo (viewBox `270 200 504 504`): the floating tile + play/music emblem verbatim, on a transparent background; wordmark/scene removed; gradients, filters, and animations reused exactly. Used by: favicon, `apple-touch-icon`, app header badge, empty-state badge. Served by both Vite (`public/`) and Express (`dist/branding/…`). |
+| Windows desktop icon (ICO) | `public/branding/ytdl-flow-icon.ico` | Static rasterization of the approved tile-emblem SVG for Windows native icon APIs. Contains 256, 128, 64, 48, 32, and 16 pixel variants; used only by the Windows installer and desktop window. |
 
 The original reference file is immutable; the icon is a standalone derivative
 that can be rebuilt from the original at any time.

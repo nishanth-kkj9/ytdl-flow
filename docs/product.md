@@ -2,10 +2,11 @@
 
 ## What YTDL Flow is
 
-YTDL Flow is a **localhost-only web application** for downloading YouTube audio
-and video. It runs entirely on the user's machine: a React web UI, a Node.js
-(Express) server, and a Python engine driven by `yt-dlp`. No data leaves the
-machine except requests to YouTube itself.
+YTDL Flow is a **localhost-only application** for downloading YouTube audio
+and video. It runs entirely on the user's machine: a React UI, a Node.js
+(Express) server, and a Python engine driven by `yt-dlp`. It can be used as a
+web app or hosted by an optional Windows Electron desktop shell. No data leaves
+the machine except requests to YouTube itself.
 
 - **Repository:** `nishanth-kkj9/ytdl-flow`
 - **Historical name:** previously published as "YTDL Modern"; internal
@@ -60,6 +61,10 @@ Media discovery
 
 - Web UI at `http://127.0.0.1:3000`: probe → confirm → download → live logs →
   history drawer, plus an engine diagnostics panel.
+- Windows x64 Electron host reuses that same frontend and backend; it provides
+  a native folder picker and persists desktop settings in the user's data
+  directory. The desktop host is packaged with a PyInstaller engine sidecar;
+  FFmpeg/ffprobe remain external prerequisites.
 - REST API (`/api/*`) mirroring the UI's capabilities.
 - WebSocket one-way broadcast for progress/log/status events.
 - Server-persisted download history surviving restarts; job restoration on UI
@@ -92,5 +97,7 @@ Node only — never to Python or YouTube directly.
   README CI badge, further UX polish) — non-binding, listed in
   `docs/roadmap.md` under Ideas.
 
-Only features actually implemented are described as current; anything else in
-this file is explicitly labeled planned or future.
+The desktop host and packaging configuration are implemented, but a packaged
+installer and clean-machine install have not yet been verified locally. Only
+features actually implemented are described as current; anything else in this
+file is explicitly labeled planned or future.

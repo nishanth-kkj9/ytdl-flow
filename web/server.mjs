@@ -1,5 +1,7 @@
 import express from "express";
 import http from "node:http";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
 import { config, allowedHostsFor } from "./config.mjs";
 import { EventBus } from "./eventBus.mjs";
@@ -15,14 +17,21 @@ import { staticMiddleware } from "./middleware/static.mjs";
 import { rateLimit, originCheck, wsVerifyClient } from "./middleware/security.mjs";
 import { requestLogger } from "./middleware/requestLog.mjs";
 
-async function main() {
+export async function startServer({
+  port = config.port,
+  host = config.host,
+  createEngine = (bus) => new EngineManager(bus),
+  createRateLimiter = rateLimit,
+  history = historyService,
+  logStartup = true,
+} = {}) {
   // ── Core services ───────────────────────────────────────────────────────
-  await historyService.init();
+  await history.init();
   const bus = new EventBus();
-  const engine = new EngineManager(bus);
+  const engine = createEngine(bus);
   // F-01: history must survive the browser tab — persist successful results
   // server-side (client saves dedupe against this by id).
-  const unsubscribeHistory = attachHistoryPersistence(bus, historyService);
+  const unsubscribeHistory = attachHistoryPersistence(bus, history);
 
   // ── Express app ─────────────────────────────────────────────────────────
   const app = express();
@@ -83,7 +92,7 @@ async function main() {
   // NOTE: This allowlist is intentionally localhost-only. If `HOST` is
   // overridden to expose the server on a LAN, LAN clients' Host headers will
   // be rejected with 421 — the server is designed to be local-hosted.
-  const allowedHosts = allowedHostsFor(config.port);
+  const allowedHosts = new Set(allowedHostsFor(port));
   app.use((req, res, next) => {
     const host = String(req.headers.host || "").toLowerCase();
     if (!allowedHosts.has(host)) {
@@ -96,12 +105,22 @@ async function main() {
   // Mutating endpoints are rate-limited and origin-checked to prevent a local
   // process or compromised browser tab from flooding the engine, and to block
   // cross-site requests (defense-in-depth on top of the JSON-only body parsing).
-  app.use("/api/probe", originCheck(), rateLimit({ maxRequests: 10, windowMs: 10_000 }), probeRouter(engine));
-  app.use("/api/download/cancel", originCheck(), rateLimit({ maxRequests: 21, windowMs: 10_000 }), cancelRouter(engine));
-  app.use("/api/download", originCheck(), rateLimit({ maxRequests: 5, windowMs: 10_000 }), downloadRouter(engine));
-  app.use("/api/history", originCheck(), historyRouter(historyService));
+  const limiters = [];
+  try {
+    limiters.push(createRateLimiter({ maxRequests: 10, windowMs: 10_000 }));
+    limiters.push(createRateLimiter({ maxRequests: 21, windowMs: 10_000 }));
+    limiters.push(createRateLimiter({ maxRequests: 5, windowMs: 10_000 }));
+    limiters.push(createRateLimiter({ maxRequests: 5, windowMs: 10_000 }));
+  } catch (error) {
+    limiters.forEach((limiter) => limiter.destroy());
+    throw error;
+  }
+  app.use("/api/probe", originCheck(), limiters[0], probeRouter(engine));
+  app.use("/api/download/cancel", originCheck(), limiters[1], cancelRouter(engine));
+  app.use("/api/download", originCheck(), limiters[2], downloadRouter(engine));
+  app.use("/api/history", originCheck(), historyRouter(history));
   app.use("/api/status", statusRouter(engine));
-  app.use("/api/engine/restart", originCheck(), rateLimit({ maxRequests: 5, windowMs: 10_000 }), restartRouter(engine));
+  app.use("/api/engine/restart", originCheck(), limiters[3], restartRouter(engine));
 
   // Health check. Liveness ping for the Node process AND a peek at engine
   // readiness in one call — lets a monitor distinguish "server up but engine
@@ -163,7 +182,7 @@ async function main() {
     bus.subscribe(type, (payload) => broadcast({ type, payload }))
   );
 
-  wss.on("connection", (socket) => {
+  const onConnection = (socket) => {
     // P0-1: the ws library emits 'error' on individual sockets for
     // receiver-level failures (oversized frame > maxPayload, invalid UTF-8,
     // protocol violations). With no 'error' listener Node raises an uncaught
@@ -198,7 +217,8 @@ async function main() {
     // This prevents Cross-Site WebSocket Hijacking (CSWSH) attacks where a
     // malicious website could otherwise drive arbitrary downloads or
     // arbitrary file writes via the Python engine.
-  });
+  };
+  wss.on("connection", onConnection);
 
   // ── WebSocket heartbeat ─────────────────────────────────────────────────────
   // Terminate clients that miss two consecutive heartbeats so half-open
@@ -221,29 +241,6 @@ async function main() {
   }, HEARTBEAT_INTERVAL_MS);
   heartbeat.unref();
 
-  // ── Start engine ────────────────────────────────────────────────────────
-  engine.start();
-
-  // ── Graceful shutdown ───────────────────────────────────────────────────
-  const shutdown = () => {
-    console.log("\nShutting down...");
-    clearInterval(heartbeat);
-    unsubs.forEach((u) => u());
-    unsubscribeHistory();
-    engine.stop();
-    // PR-04: wss.close() only stops accepting NEW upgrades; connected clients
-    // would keep server.close()'s callback from firing until the 2s force
-    // exit. Terminate them so shutdown is prompt and deterministic.
-    for (const client of wss.clients) {
-      client.terminate();
-    }
-    wss.close();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000).unref();
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-
   // ── Error handling middleware ───────────────────────────────────────────
   // Preserve the status code that upstream layers attached to the error
   // (e.g. 404 from a missing /downloads file, 400 from malformed JSON)
@@ -259,24 +256,120 @@ async function main() {
   });
 
   // ── Listen ──────────────────────────────────────────────────────────────
-  server.listen(config.port, config.host, () => {
+  let boundPort;
+  try {
+    await new Promise((resolve, reject) => {
+      const onError = (error) => reject(error);
+      server.once("error", onError);
+      wss.once("error", onError);
+      server.listen(port, host, () => {
+        server.off("error", onError);
+        wss.off("error", onError);
+        boundPort = server.address().port;
+        for (const allowedHost of allowedHostsFor(boundPort)) {
+          allowedHosts.add(allowedHost);
+        }
+        resolve();
+      });
+    });
+  } catch (error) {
+    clearInterval(heartbeat);
+    unsubs.forEach((unsubscribe) => unsubscribe());
+    unsubscribeHistory();
+    limiters.forEach((limiter) => limiter.destroy());
+    server.removeListener("request", app);
+    wss.off("connection", onConnection);
+    wss.close();
+    await engine.stop();
+    throw error;
+  }
+
+  const address = `http://${host}:${boundPort}`;
+  let closePromise;
+  const close = () => {
+    if (closePromise) return closePromise;
+    closePromise = (async () => {
+      clearInterval(heartbeat);
+      unsubs.forEach((unsubscribe) => unsubscribe());
+      unsubscribeHistory();
+      limiters.forEach((limiter) => limiter.destroy());
+      for (const client of wss.clients) {
+        client.terminate();
+      }
+      wss.off("connection", onConnection);
+      wss.close();
+
+      const httpClosed = new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error && error.code !== "ERR_SERVER_NOT_RUNNING") {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+        server.closeAllConnections?.();
+      });
+      const httpClosedAndReleased = httpClosed.finally(() => {
+        server.removeListener("request", app);
+      });
+      await Promise.all([httpClosedAndReleased, engine.stop()]);
+    })();
+    return closePromise;
+  };
+
+  try {
+    engine.start();
+  } catch (error) {
+    await close();
+    throw error;
+  }
+
+  if (logStartup) {
     console.log(`\n🎬 YTDL Flow Web`);
-    console.log(`   ➜  http://${config.host}:${config.port}`);
-    console.log(`   ➜  API health: http://${config.host}:${config.port}/api/health`);
-    console.log(`   ➜  WebSocket: ws://${config.host}:${config.port}/ws\n`);
+    console.log(`   ➜  ${address}`);
+    console.log(`   ➜  API health: ${address}/api/health`);
+    console.log(`   ➜  WebSocket: ws://${host}:${boundPort}/ws\n`);
+  }
+
+  return { server, wss, engine, close, address };
+}
+
+async function main() {
+  const application = await startServer();
+  let shuttingDown = false;
+  const shutdown = async (exitCode = 0) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log("\nShutting down...");
+    try {
+      await application.close();
+    } catch (error) {
+      console.error("[server] Shutdown failed:", error);
+      process.exitCode = 1;
+      return;
+    }
+    process.exitCode = exitCode;
+  };
+
+  process.once("SIGINT", () => void shutdown());
+  process.once("SIGTERM", () => void shutdown());
+  process.on("unhandledRejection", (reason) => {
+    console.error("[server] Unhandled rejection:", reason);
+    void shutdown(1);
+  });
+  process.on("uncaughtException", (error) => {
+    console.error("[server] Uncaught exception:", error);
+    void shutdown(1);
   });
 }
 
-process.on("unhandledRejection", (reason) => {
-  console.error("[server] Unhandled rejection:", reason);
-  process.exit(1);
-});
-process.on("uncaughtException", (err) => {
-  console.error("[server] Uncaught exception:", err);
-  process.exit(1);
-});
+const isEntrypoint =
+  process.argv[1] &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
 
-main().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+if (isEntrypoint) {
+  main().catch((error) => {
+    console.error("Failed to start server:", error);
+    process.exitCode = 1;
+  });
+}

@@ -39,9 +39,11 @@ from typing import Callable, Optional
 
 try:
     from yt_dlp import YoutubeDL
+    from yt_dlp.utils import Popen as _YtDlpPopen
     _YDL_OK = True
 except ImportError:
     _YDL_OK = False
+    _YtDlpPopen = None
     class YoutubeDL:  # type: ignore
         def __init__(self, *a, **kw): pass
         def __enter__(self): return self
@@ -63,6 +65,82 @@ except ImportError:
 
 from helpers import format_size, format_duration, sanitize_filename
 import logger as applog
+
+
+class DownloadCancelledError(RuntimeError):
+    def __init__(self, message: str, output_path: str | None = None):
+        super().__init__(message)
+        self.output_path = output_path
+
+
+_FFMPEG_CANCELLATION = threading.local()
+
+
+@contextlib.contextmanager
+def _ffmpeg_cancellation_scope(cancel_event: threading.Event):
+    previous_event = getattr(_FFMPEG_CANCELLATION, "event", None)
+    _FFMPEG_CANCELLATION.event = cancel_event
+    try:
+        yield
+    finally:
+        if previous_event is None:
+            del _FFMPEG_CANCELLATION.event
+        else:
+            _FFMPEG_CANCELLATION.event = previous_event
+
+
+if _YtDlpPopen is not None:
+    _ORIGINAL_YTDLP_POPEN_RUN = _YtDlpPopen.run.__func__
+
+    def _run_cancellable_ytdlp_process(cls, *args, timeout=None, input=None, **kwargs):
+        cancel_event = getattr(_FFMPEG_CANCELLATION, "event", None)
+        if cancel_event is None:
+            return _ORIGINAL_YTDLP_POPEN_RUN(cls, *args, timeout=timeout, input=input, **kwargs)
+
+        if input is not None and kwargs.get("stdin") is None:
+            kwargs["stdin"] = subprocess.PIPE
+        command = args[0] if args else ""
+        command_args = command if isinstance(command, (list, tuple)) else [command]
+        is_ffmpeg = bool(command_args and "ffmpeg" in os.path.basename(str(command_args[0])).lower())
+        output_path = str(command_args[-1]) if is_ffmpeg and command_args else None
+        deadline = time.monotonic() + timeout if timeout is not None else None
+        communication_input = input
+        text_mode = bool(
+            kwargs.get("text") or kwargs.get("universal_newlines")
+            or kwargs.get("encoding") or kwargs.get("errors")
+        )
+        empty_output = "" if text_mode else b""
+
+        with cls(*args, **kwargs) as proc:
+            while True:
+                try:
+                    stdout, stderr = proc.communicate(
+                        input=communication_input,
+                        timeout=min(0.1, max(0, deadline - time.monotonic()))
+                        if deadline is not None
+                        else 0.1,
+                    )
+                    if cancel_event.is_set():
+                        raise DownloadCancelledError(
+                            "Download cancelled by user.",
+                            output_path=output_path,
+                        )
+                    return stdout or empty_output, stderr or empty_output, proc.returncode
+                except subprocess.TimeoutExpired as exc:
+                    communication_input = None
+                    if cancel_event.is_set():
+                        proc.kill()
+                        proc.communicate()
+                        raise DownloadCancelledError(
+                            "Download cancelled by user.",
+                            output_path=output_path,
+                        ) from exc
+                    if deadline is not None and time.monotonic() >= deadline:
+                        proc.kill()
+                        proc.communicate()
+                        raise exc
+
+    _YtDlpPopen.run = classmethod(_run_cancellable_ytdlp_process)
 
 # ── Audio format → codec string ───────────────────────────────────────────────
 AUDIO_FORMATS: dict[str, str] = {
@@ -1349,6 +1427,7 @@ class AudioDownloadEngine:
         self._cancel_event  = cancel_event or threading.Event()
         self._tracker       = _SpeedTracker()
         self._hook_filepath: str | None = None
+        self._hook_source_filepath: str | None = None
         self._ydl_pre_path:  str | None = None
         self._last_stderr:   str = ""
         self._ffmpeg_dir:   str | None = None
@@ -1697,6 +1776,12 @@ class AudioDownloadEngine:
 
     def download(self, url: str, info: dict | None = None,
                  retry_cb=None) -> DownloadResult:
+        """Download and apply the same cancellation signal to FFmpeg children."""
+        with _ffmpeg_cancellation_scope(self._cancel_event):
+            return self._download_with_retry(url, info, retry_cb)
+
+    def _download_with_retry(self, url: str, info: dict | None = None,
+                             retry_cb=None) -> DownloadResult:
         """Download with automatic retry (exponential back-off).
 
         `retry_cb(attempt, delay_seconds, error_msg)` is invoked before each
@@ -1712,6 +1797,14 @@ class AudioDownloadEngine:
                 return self._download_once(url, info)
             except Exception as exc:
                 last_exc = exc
+                if isinstance(exc, DownloadCancelledError):
+                    for output_path, description in (
+                        (exc.output_path, "incomplete FFmpeg output"),
+                        (self._hook_filepath, "incomplete FFmpeg output"),
+                        (self._hook_source_filepath, "cancelled download intermediate"),
+                    ):
+                        if output_path:
+                            self._remove_cancelled_download_file(output_path, description)
                 # BOT-FIX: hammering the same URL while the bot-check is active
                 # makes the IP look MORE automated, not less. Fail fast with
                 # the actionable hint instead of burning all retries.
@@ -1747,6 +1840,24 @@ class AudioDownloadEngine:
             success=False, url=url,
             error=error_msg, error_type=error_type,
         )
+
+    def _remove_cancelled_download_file(self, output_path: str, description: str) -> None:
+        output_root = os.path.normcase(os.path.realpath(self.output_dir))
+        candidate = os.path.normcase(os.path.realpath(output_path))
+        try:
+            if os.path.commonpath((output_root, candidate)) != output_root:
+                return
+        except ValueError:
+            return
+        try:
+            if os.path.getmtime(candidate) < self._download_started:
+                return
+            os.remove(candidate)
+            applog.info(f"Removed {description} after cancellation: {os.path.basename(candidate)}")
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            applog.error(f"Could not remove incomplete FFmpeg output after cancellation: {exc}")
 
     # ── yt-dlp options ─────────────────────────────────────────────────────────
 
@@ -1835,7 +1946,7 @@ class AudioDownloadEngine:
     def _hook(self, d: dict) -> None:
         """yt-dlp progress hook — cooperative cancellation check-point."""
         if self._cancel_event.is_set():
-            raise Exception("Download cancelled by user.")
+            raise DownloadCancelledError("Download cancelled by user.")
 
         status = d.get("status")
         if status == "downloading":
@@ -1854,6 +1965,7 @@ class AudioDownloadEngine:
         elif status == "finished":
             raw = d.get("filename", "")
             if raw:
+                self._hook_source_filepath = raw
                 if self.mode == "audio":
                     ext = AUDIO_FORMATS.get(self.audio_format, self.audio_format)
                     self._hook_filepath = os.path.splitext(raw)[0] + f".{ext}"
@@ -1883,6 +1995,7 @@ class AudioDownloadEngine:
         # and always ≪ any file mtime, which made the "newer than start" filter
         # a mathematical no-op.
         self._download_started = time.time()
+        self._hook_source_filepath = None
 
         applog.log_download_start(url, self.audio_format, self.quality)
 
@@ -1900,6 +2013,7 @@ class AudioDownloadEngine:
 
         while True:
             self._hook_filepath = None
+            self._hook_source_filepath = None
             self._ydl_pre_path = None
             self._tracker = _SpeedTracker()
             # Per-instance logger (NOT global stderr redirection): 5 download

@@ -27,8 +27,10 @@ function clampEngineLine(line) {
  * modifying this module.
  */
 export class EngineManager {
-  constructor(eventBus) {
+  constructor(eventBus, { runtimeConfig = config, processSpawn = spawn } = {}) {
     this.bus = eventBus;
+    this.config = runtimeConfig;
+    this.processSpawn = processSpawn;
     this.child = null;
     this.stdin = null;
     this.restartAttempts = 0;
@@ -37,7 +39,7 @@ export class EngineManager {
     this.pendingCommands = [];
     // Cap the pending queue so a burst of commands (or a long engine outage)
     // cannot grow memory unboundedly (mirrors the history 100-record cap).
-    this.maxPendingCommands = config.engineMaxPendingCommands;
+    this.maxPendingCommands = this.config.engineMaxPendingCommands;
     // In-flight `jobs` queries awaiting a jobs_result reply, keyed by
     // request_id. Each entry carries its timeout so a dead engine can't
     // leave callers hanging.
@@ -103,6 +105,9 @@ export class EngineManager {
     // hanging on an id the new engine will never see again.
     const pending = this.pendingCommands;
     this.pendingCommands = [];
+    const pendingDownloadIds = new Set(
+      pending.filter((cmd) => cmd.cmd === "download" && cmd.id).map((cmd) => String(cmd.id)),
+    );
     for (const cmd of pending) {
       this.bus.emit("error", {
         type: "error",
@@ -111,22 +116,34 @@ export class EngineManager {
         error: "Engine was restarted before this command ran — please retry.",
       });
     }
+    const activeDownloadIds = [...this.activeDownloadIds];
+    this.activeDownloadIds.clear();
+    for (const id of activeDownloadIds) {
+      if (pendingDownloadIds.has(id)) continue;
+      this.bus.emit("error", {
+        type: "error",
+        id,
+        error_type: "EngineRestarted",
+        error: "Engine was restarted during this download — please retry.",
+      });
+    }
     this._failPendingJobRequests();
     this.spawn();
     return true;
   }
 
   spawn() {
+    if (this.stopping) return;
     // Cancel any pending delayed respawn — a fresh spawn supersedes it.
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
     }
     this.fatalError = false;
-    const pythonExe = process.env.PYTHON || "python";
-    const args = [config.engineEntry];
-    const child = spawn(pythonExe, args, {
-      cwd: config.engineCwd,
+    const pythonExe = this.config.engineExecutable || process.env.PYTHON || "python";
+    const args = this.config.engineArgs ?? [this.config.engineEntry];
+    const child = this.processSpawn(pythonExe, args, {
+      cwd: this.config.engineCwd,
       stdio: ["pipe", "pipe", "pipe"],
       // PR-05: never let the sidecar pop a console window on Windows when the
       // server itself is launched from a GUI context (detached/launcher).
@@ -168,7 +185,7 @@ export class EngineManager {
       // Treat a spawn failure like a crash so the bounded-restart logic can
       // recover (e.g. when Python is temporarily unavailable) instead of
       // leaving the engine stuck in a permanent "starting" state.
-      this.maybeRestart();
+      if (!this.stopping) this.maybeRestart();
     });
 
     child.on("exit", (code, signal) => {
@@ -292,7 +309,8 @@ export class EngineManager {
   }
 
   maybeRestart() {
-    if (this.restartAttempts >= config.engineMaxRestarts) {
+    if (this.stopping) return;
+    if (this.restartAttempts >= this.config.engineMaxRestarts) {
       this.fatalError = true;
       // Emit a terminal error for each pending command before discarding
       const pending = this.pendingCommands;
@@ -314,7 +332,7 @@ export class EngineManager {
       return;
     }
     this.restartAttempts += 1;
-    console.warn(`Engine exited unexpectedly — restarting (${this.restartAttempts}/${config.engineMaxRestarts})`);
+    console.warn(`Engine exited unexpectedly — restarting (${this.restartAttempts}/${this.config.engineMaxRestarts})`);
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null;
       this.spawn();
@@ -474,7 +492,7 @@ export class EngineManager {
     return this.pendingCommands.length;
   }
 
-  stop() {
+  async stop() {
     // Deliberate shutdown: suppress the crash path in _onChildExit (a killed
     // child reports code === null) and cancel any pending respawn.
     this.stopping = true;
@@ -482,13 +500,46 @@ export class EngineManager {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
     }
-    if (this.child) {
-      this.child.kill();
-      this.child = null;
-      this.stdin = null;
-    }
+    const child = this.child;
+    this.child = null;
+    this.stdin = null;
     this.pendingCommands = [];
     this.activeDownloadIds.clear();
     this._failPendingJobRequests();
+    if (child) {
+      if (typeof child.once !== "function") {
+        child.kill();
+        return;
+      }
+      const waitForExit = (timeoutMs) =>
+        new Promise((resolve) => {
+          if (child.exitCode != null || child.signalCode != null) {
+            resolve(true);
+            return;
+          }
+          const onExit = () => {
+            clearTimeout(timer);
+            resolve(true);
+          };
+          const timer = setTimeout(() => {
+            child.removeListener("exit", onExit);
+            resolve(false);
+          }, timeoutMs);
+          child.once("exit", onExit);
+        });
+
+      if (child.stdin && !child.stdin.destroyed) {
+        child.stdin.end();
+      }
+      if (!(await waitForExit(500))) {
+        child.kill();
+        if (!(await waitForExit(1_000))) {
+          child.kill("SIGKILL");
+          if (!(await waitForExit(1_000))) {
+            throw new Error("Python engine did not exit after forced termination");
+          }
+        }
+      }
+    }
   }
 }

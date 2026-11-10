@@ -10,9 +10,9 @@ YTDL Flow is a strict three-tier localhost application. Each tier owns a clear
 responsibility and communicates with its neighbor over an explicit contract.
 
 ```
-Browser
+Browser tab or Electron window (optional Windows shell)
   ↓
-React SPA (Vite build, TypeScript, Zustand)
+React SPA (same Vite build, TypeScript, Zustand)
   ↓
 REST + WebSocket (localhost-only, origin-checked)
   ↓
@@ -92,6 +92,25 @@ sequenceDiagram
     (`web/data/history.json`) with atomic temp-file + rename writes and
     server-side persistence across restarts.
 
+## Windows desktop host (`desktop/`)
+
+- `main.mjs` enforces a single app instance, starts the backend in an Electron
+  utility process, waits for its health check before creating a window, and
+  shuts it down when the app exits.
+- `backend-runner.mjs` imports the same `startServer()` lifecycle as the web
+  launcher. The server binds to `127.0.0.1` on an OS-selected port; the
+  renderer continues to use the existing same-origin REST and WebSocket
+  contracts.
+- The BrowserWindow enables context isolation and sandboxing, disables
+  renderer Node integration, and only exposes `chooseDownloadDirectory`
+  through `preload.cjs`. The main process validates the sender frame and
+  checks `/api/status` before switching folders; unavailable or malformed
+  status fails closed.
+- The selected folder is persisted in Electron user data. History and logs
+  also use user-data paths; the packaged Python engine is a PyInstaller
+  sidecar under `resources/engine/`. FFmpeg/ffprobe are external prerequisites
+  and are intentionally not bundled.
+
 ## Python engine (`python-engine/`)
 
 - `ipc_main.py` — stdio entrypoint: reads NDJSON requests, threads results
@@ -110,8 +129,9 @@ sequenceDiagram
 
 | Data | Where | Mechanism |
 |------|-------|-----------|
-| Downloads | `web/data/downloads/` | yt-dlp output, metadata-embedded files |
-| History | `web/data/history.json` | JSON file, atomic write (temp + rename) |
+| Downloads | Configured `downloads/` by default; desktop uses the user-selected folder | yt-dlp output, metadata-embedded files |
+| History | `web/data/history.json`; desktop uses Electron user data | JSON file, atomic write (temp + rename) |
+| Logs | `logs/` by default; desktop uses Electron user data | Rotating Python engine logs |
 | Engine state | in-memory (Node) | rebuilt/reported via status API |
 
 ## Worker pool & queue

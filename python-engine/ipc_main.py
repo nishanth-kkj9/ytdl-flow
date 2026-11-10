@@ -295,18 +295,21 @@ def _run_download(id_: str, url: str, audio_format: str, quality: str, output_di
 
 
 def _resolve_output_dir(output_dir: str) -> str | None:
-    """Resolve output_dir and enforce it stays within the project downloads folder.
+    """Resolve output_dir and enforce it stays within the configured downloads folder.
 
     Returns a canonical absolute path on success, or None to signal rejection.
     This is a defense-in-depth guard: the Node layer already locks `output_dir`
-    to `config.downloadsDir`, but the engine must not blindly trust its input
-    if that boundary is ever bypassed. `realpath` also resolves symlinks, so a
-    symlink inside downloads that points elsewhere is rejected.
+    to `YTDL_DOWNLOADS_DIR`, but the engine must not blindly trust its input if
+    that boundary is ever bypassed. `realpath` also resolves symlinks, so a
+    symlink inside the configured root that points elsewhere is rejected.
     """
+    downloads_root = os.environ.get("YTDL_DOWNLOADS_DIR", "").strip()
+    if not downloads_root:
+        downloads_root = os.path.join(_YDL_PROJECT_ROOT, "..", "downloads")
     if not output_dir:
-        output_dir = os.path.join(_YDL_PROJECT_ROOT, "..", "downloads")
+        output_dir = downloads_root
 
-    expected_base = os.path.realpath(os.path.join(_YDL_PROJECT_ROOT, "..", "downloads"))
+    expected_base = os.path.realpath(downloads_root)
 
     resolved = os.path.realpath(output_dir)
     resolved_norm = os.path.normcase(resolved)

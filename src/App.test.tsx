@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the transport so App's useEngineEvents subscription and the store's
@@ -43,6 +43,7 @@ describe("App — bot-check countdown anchor", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    delete window.ytdlDesktop;
   });
 
   it("re-anchors the local clock when the breaker opens after a long idle period", async () => {
@@ -115,5 +116,50 @@ describe("App — bot-check countdown anchor", () => {
       useDownloadStore.getState().setBotBreaker(null);
     });
     expect(screen.queryByRole("status", { name: /cooldown/i })).toBeNull();
+  });
+
+  it("uses the native desktop dialog to change the download folder", async () => {
+    const chooseDownloadDirectory = vi.fn(async () => ({
+      status: "updated" as const,
+      path: "D:/YTDL Flow",
+    }));
+    Object.defineProperty(window, "ytdlDesktop", {
+      configurable: true,
+      value: { chooseDownloadDirectory },
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+    const button = screen.getByRole("button", { name: "Choose download folder" });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    expect(chooseDownloadDirectory).toHaveBeenCalledOnce();
+    expect(button).toHaveAttribute("title", "Download folder: D:/YTDL Flow");
+  });
+
+  it("announces when the backend blocks a folder change during active jobs", async () => {
+    Object.defineProperty(window, "ytdlDesktop", {
+      configurable: true,
+      value: {
+        chooseDownloadDirectory: vi.fn(async () => ({
+          status: "blocked" as const,
+          message: "Finish or cancel active downloads before changing the download folder.",
+        })),
+      },
+    });
+
+    await act(async () => {
+      render(<App />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Choose download folder" }));
+    });
+
+    expect(
+      screen.getByText("Finish or cancel active downloads before changing the download folder."),
+    ).toBeInTheDocument();
   });
 });

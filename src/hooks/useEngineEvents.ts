@@ -136,6 +136,7 @@ export function useEngineEvents() {
           case "probe_result": {
             const info = payload.info as Record<string, unknown>;
             if (info) {
+              useDownloadStore.getState().clearProbeTimeout();
               setProbeInfo({
                 id,
                 title: String(info.title ?? "Unknown title"),
@@ -318,6 +319,7 @@ export function useEngineEvents() {
               // its Retry button existed solely on the REST path. Surface
               // them identically so both paths behave the same.
               // F-11: also release the probe spinner.
+              useDownloadStore.getState().clearProbeTimeout();
               useDownloadStore.setState({ probeError: errMsg, probeInFlight: false });
               addToast(`Probe failed: ${errMsg}`, "error");
               setStatusMessage("Probe failed.");

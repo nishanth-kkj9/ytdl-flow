@@ -30,6 +30,56 @@ def test_instantiation():
     assert engine is not None
 
 
+def test_ffmpeg_subprocess_is_terminated_when_download_is_cancelled():
+    import subprocess
+    import threading
+    import time
+    import pytest
+    from yt_dlp.utils import Popen
+    from engine import DownloadCancelledError, _ffmpeg_cancellation_scope
+
+    cancel_event = threading.Event()
+    cancel_timer = threading.Timer(0.25, cancel_event.set)
+    started = time.monotonic()
+    cancel_timer.start()
+    try:
+        with _ffmpeg_cancellation_scope(cancel_event):
+            with pytest.raises(DownloadCancelledError, match="cancelled"):
+                Popen.run(
+                    [sys.executable, "-c", "import time; time.sleep(20)"],
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+    finally:
+        cancel_timer.cancel()
+
+    assert time.monotonic() - started < 3, "cancellation must not wait for the FFmpeg subprocess to finish"
+
+
+def test_cancelled_output_cleanup_only_removes_new_files_inside_download_dir(tmp_path):
+    import threading
+    import time
+
+    engine = AudioDownloadEngine(output_dir=str(tmp_path), cancel_event=threading.Event())
+    engine._download_started = time.time() - 1
+    generated_output = tmp_path / "incomplete.mp3"
+    generated_output.write_bytes(b"partial")
+    downloaded_intermediate = tmp_path / "source.wav"
+    downloaded_intermediate.write_bytes(b"intermediate")
+
+    engine._remove_cancelled_download_file(str(generated_output), "test output")
+    assert not generated_output.exists()
+    engine._remove_cancelled_download_file(str(downloaded_intermediate), "test intermediate")
+    assert not downloaded_intermediate.exists()
+
+    existing_output = tmp_path / "existing.mp3"
+    existing_output.write_bytes(b"keep")
+    engine._download_started = time.time() + 10
+    engine._remove_cancelled_download_file(str(existing_output), "test output")
+    assert existing_output.exists(), "cancellation cleanup must not remove pre-existing output"
+
+
 def test_default_config():
     engine = AudioDownloadEngine()
     assert engine.audio_format == "opus"
