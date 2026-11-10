@@ -11,6 +11,8 @@ coverage/
 .ruff_cache
 Desktop*/**/bin/
 Desktop*/**/obj/
+desktop/windows/**/bin/
+desktop/windows/**/obj/
 **/.vs/
 **/AppPackages/
 **/Generated Files/

@@ -10,11 +10,9 @@ YTDL Flow is a strict three-tier localhost application. Each tier owns a clear
 responsibility and communicates with its neighbor over an explicit contract.
 
 ```
-Browser tab or native WinUI 3 desktop shell (Windows-only)
-  ↓
-React SPA (same Vite build, TypeScript, Zustand)
-  ↓
-REST + WebSocket (localhost-only, origin-checked)
+Browser tab → React SPA (Vite, TypeScript, Zustand) ─┐
+                                                    ├→ REST + WebSocket (localhost-only, origin-checked)
+Native WinUI 3 shell (Windows-only, XAML) ──────────┘
   ↓
 Node.js / Express server (security, queue, history, engine lifecycle)
   ↓
@@ -41,7 +39,8 @@ sequenceDiagram
     Eng->>YT: metadata extraction
     YT-->>Eng: title, duration, formats, thumbnail
     Eng-->>API: ProbeResult
-    API-->>UI: 200 metadata
+    API-->>UI: 200 { id }
+    API-->>UI: WebSocket probe_result (metadata)
     UI->>API: POST /api/download (format, quality, trim)
     API->>Mgr: enqueue job (worker pool, max 5)
     Mgr->>Eng: download request (NDJSON)
@@ -100,12 +99,18 @@ sequenceDiagram
   native folder selection while the Node backend remains the source of truth
   for validation, queueing, history, and the Python engine lifecycle.
 - A small Node helper (`desktop/backend-runner-stdio.mjs`) starts the shared
-  backend, waits for `/api/health`, and reports readiness as JSON over stdout
-  for the WinUI supervisor process.
+  backend on a dynamic loopback port, waits for `/api/health`, and reports the
+  endpoint as validated JSON over stdout for the WinUI supervisor process.
+- The WinUI shell uses `/api/probe` to submit a probe, then correlates the
+  returned request ID with the asynchronous `probe_result` WebSocket event;
+  the initial REST response is not metadata.
 - The selected folder is persisted in the user's local application data; the
   backend continues to own the authoritative download directory behavior and
-  history persistence. FFmpeg/ffprobe remain external prerequisites and are
+  history persistence. The desktop presentation is native XAML and does not
+  embed the React SPA. FFmpeg/ffprobe remain external prerequisites and are
   intentionally not bundled by the native app shell.
+- Existing Electron sources and packaging scripts remain in the repository;
+  the WinUI runtime does not remove or alter that separate path.
 
 ## Python engine (`python-engine/`)
 
@@ -126,8 +131,8 @@ sequenceDiagram
 | Data | Where | Mechanism |
 |------|-------|-----------|
 | Downloads | Configured `downloads/` by default; desktop uses the user-selected folder | yt-dlp output, metadata-embedded files |
-| History | `web/data/history.json`; desktop uses Electron user data | JSON file, atomic write (temp + rename) |
-| Logs | `logs/` by default; desktop uses Electron user data | Rotating Python engine logs |
+| History | `web/data/history.json` by default; desktop passes its local app-data directory | JSON file, atomic write (temp + rename) |
+| Logs | `logs/` by default; desktop passes its local app-data directory | Rotating Python engine logs |
 | Engine state | in-memory (Node) | rebuilt/reported via status API |
 
 ## Worker pool & queue

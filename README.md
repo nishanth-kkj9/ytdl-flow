@@ -100,7 +100,7 @@ YTDL Flow is a **localhost-only** YouTube downloader that runs entirely on your 
 | Layer | Technology |
 |-------|------------|
 | **Frontend** | React 19, TypeScript 5.6, Zustand, Tailwind CSS v4, Vite 6 |
-| **Desktop host** | Electron 45 (Windows x64 installer) |
+| **Desktop host** | Native WinUI 3 / .NET 10; existing Electron 45 tooling is retained |
 | **Backend** | Node.js 18+ web runtime, Express 5.2, WebSocket (`ws` library) |
 | **Engine** | Python 3.9+, yt-dlp, mutagen, FFmpeg |
 | **Optional** | Deno (JS runtime for yt-dlp's age-restricted video extraction) |
@@ -253,35 +253,38 @@ The Vite dev server automatically proxies `/api`, `/downloads`, and `/ws` to the
 
 ### Windows Desktop App
 
-The optional Windows x64 desktop host serves the same built React app from a
-loopback-only Node server. The NSIS installer bundles Electron and the
-PyInstaller-built Python engine. **FFmpeg/ffprobe are not bundled**; install
-FFmpeg separately and make it available on `PATH`, or configure
+The native Windows desktop shell is a WinUI 3 application. It supervises the
+shared Node backend on a dynamic loopback port and uses the existing REST and
+WebSocket contracts. The older Electron source, scripts, and release workflow
+remain in the repository; this runtime stabilization does not remove or change
+that packaging path. **FFmpeg/ffprobe are not bundled**; install FFmpeg
+separately and make it available on `PATH`, or configure
 `FFMPEG_PATH`/`FFMPEG_HOME`. Deno and YouTube cookies remain optional
 user-managed prerequisites.
 
-To develop or build the installer on Windows, use Node.js 24 and Python 3.11:
+To develop and test the native desktop shell on Windows, install the .NET 10
+SDK and Node.js 24:
 
 ```powershell
 npm ci
 cd web
 npm ci
 cd ..
-python -m pip install -r python-engine/requirements.lock
-python -m pip install -r python-engine/requirements-build.txt
-npm run desktop:dev
+& 'C:\Program Files\dotnet\dotnet.exe' run --project desktop\windows\YtdlFlow.Desktop\YtdlFlow.Desktop.csproj
 ```
 
-`npm run desktop:dev` builds the frontend and opens the desktop host. To create
-an installer instead, run `npm run desktop:dist`; the NSIS installer is written
-to `release/`. `npm run desktop:pack` creates an unpacked Windows app directory
-for packaging checks. The release workflow also builds and attaches the Windows
-installer to tagged GitHub releases.
+The WinUI shell starts the shared backend; the server continues to serve the
+built web frontend, while the desktop UI is native XAML. Build the frontend
+first with `npm run build`. Native service tests run with:
 
-The desktop app stores settings, history, and logs in Electron's per-user data
-directory. Its header folder button opens a native directory picker; changing
-the folder is refused while the backend reports active jobs. Web mode and its
-default paths remain unchanged.
+```powershell
+& 'C:\Program Files\dotnet\dotnet.exe' test desktop\windows\YtdlFlow.Desktop.Tests\YtdlFlow.Desktop.Tests.csproj --configuration Release
+```
+
+The WinUI app stores its settings under the user's local application data and
+passes desktop-specific data, log, and download paths to the backend. Its
+native folder picker refuses changes while downloads are active. Web mode and
+its default paths remain unchanged.
 
 ### Running Tests
 
@@ -487,7 +490,10 @@ ytdl-flow/
 │   ├── dev-all.mjs                # Orchestrate frontend + backend together
 │   └── ...
 │
-├── desktop/                       # Electron main process, preload, backend runner
+├── desktop/
+│   ├── backend-runner-stdio.mjs   # Supervised Node backend for WinUI
+│   ├── windows/                    # Native WinUI 3 shell and service tests
+│   └── ...                         # Retained Electron sources and scripts
 ├── public/branding/                # Web icon derivative and Windows ICO
 ├── test-smoke.mjs                 # Integration smoke tests
 ├── eslint.config.js               # ESLint configuration
@@ -510,7 +516,8 @@ YTDL Flow implements **defense-in-depth** security controls:
 | Control | Implementation | Rationale |
 |---------|---------------|-----------|
 | **Loopback defaults** | Defaults to `127.0.0.1`; validates loopback Host headers | Keeps the intended local-only access model |
-| **Electron isolation** | Context isolation, sandboxing, no renderer Node access, narrow preload API, trusted-frame validation | Keeps native folder selection behind the main-process boundary |
+| **Electron isolation** | Context isolation, sandboxing, no renderer Node access, narrow preload API, trusted-frame validation | Retained Electron path keeps native folder selection behind the main-process boundary |
+| **Native backend supervision** | WinUI starts the shared backend on loopback, validates readiness, and requests graceful shutdown | Keeps the native shell isolated from engine internals |
 | **Host header validation** | Rejects requests with invalid `Host` header | Blocks DNS rebinding attacks |
 | **URL allowlist** | Only `youtube.com` and `youtu.be` domains | Prevents arbitrary URL downloads |
 | **Path containment** | Resolves symlinks and confines engine output to the configured download directory | Helps prevent path traversal |
@@ -532,7 +539,8 @@ YTDL Flow implements **defense-in-depth** security controls:
 2. **Backend** — Install → Syntax checks → `node:test` suite
 3. **Python Engine** — Install from lock file → Compile check → Import verification → pytest
 4. **Smoke Tests** — Start server → Check health, history, invalid-probe handling, and DNS-rebinding protection; the live integration probe is opt-in
-5. **Tagged releases** — Build the existing web archives and a Windows x64 NSIS desktop installer
+5. **Windows desktop** — Restore, build, and run WinUI service tests on a Windows runner with .NET 10
+6. **Tagged releases** — Build the existing web archives and a Windows x64 NSIS desktop installer
 
 #### `release.yml` (Runs on `v*` tags)
 
@@ -591,8 +599,9 @@ desktop app.
 1. Confirm the installer is for 64-bit Windows.
 2. Install FFmpeg and ffprobe and verify `ffmpeg -version` works in a new
    terminal, or set `FFMPEG_PATH`/`FFMPEG_HOME` in the Windows user environment.
-3. Check the app's `logs` folder under Electron's per-user data directory for
-   Python engine diagnostics.
+3. For the WinUI app, check the `logs` directory under the user's local
+   application data. For the retained Electron app, check its per-user data
+   directory for Python engine diagnostics.
 
 ### Python Dependency Conflicts
 

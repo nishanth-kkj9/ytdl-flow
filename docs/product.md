@@ -5,8 +5,9 @@
 YTDL Flow is a **localhost-only application** for downloading YouTube audio
 and video. It runs entirely on the user's machine: a React UI, a Node.js
 (Express) server, and a Python engine driven by `yt-dlp`. It can be used as a
-web app or hosted by an optional Windows Electron desktop shell. No data leaves
-the machine except requests to YouTube itself.
+web app or hosted by a native Windows WinUI 3 desktop shell. Existing Electron
+sources and packaging scripts are retained as a separate desktop path. No data
+leaves the machine except requests to YouTube itself.
 
 - **Repository:** `nishanth-kkj9/ytdl-flow`
 - **Historical name:** previously published as "YTDL Modern"; internal
@@ -61,11 +62,18 @@ Media discovery
 
 - Web UI at `http://127.0.0.1:3000`: probe → confirm → download → live logs →
   history drawer, plus an engine diagnostics panel.
-- Native Windows desktop shell built with C# + WinUI 3 reuses the same frontend
-  and backend contracts; it provides a native folder picker and persists
-  desktop settings in the user's local app data. The desktop shell supervises
-  the shared backend and keeps the backend authoritative for queueing, history,
-  and Python engine coordination; FFmpeg/ffprobe remain external prerequisites.
+- Native Windows desktop shell built with C# + WinUI 3 uses a native XAML
+  presentation over the same backend contracts; it provides a native folder
+  picker and persists desktop settings in the user's local app data. The
+  desktop shell supervises the shared backend and keeps the backend
+  authoritative for queueing, history, and Python engine coordination;
+  FFmpeg/ffprobe remain external prerequisites.
+- The WinUI shell starts the backend on a dynamic loopback endpoint, verifies
+  health before use, displays distinct backend/engine/WebSocket states, and
+  gracefully stops its owned backend process on exit. Probe metadata arrives
+  asynchronously through the correlated `probe_result` WebSocket event.
+- Electron sources and packaging workflows remain in the repository and are
+  not removed by the WinUI runtime work.
 - REST API (`/api/*`) mirroring the UI's capabilities.
 - WebSocket one-way broadcast for progress/log/status events.
 - Server-persisted download history surviving restarts; job restoration on UI
