@@ -294,33 +294,36 @@ generate raster exports from the SVG at build time (tracked in
 
 ---
 
-## ADR-012 — Electron desktop host reuses the localhost application
+## ADR-012 — Native WinUI 3 desktop host replaces the Electron shell
 
 ### Context
-The project needs a Windows desktop experience without creating a second UI,
-backend, or media pipeline. The existing React app already communicates with
-Node over same-origin REST and WebSocket contracts.
+The project needs a Windows-first desktop experience that is genuinely native,
+resource-efficient, and aligned with the repository's approved desktop stack.
+The existing React app already communicates with Node over same-origin REST
+and WebSocket contracts, so the correct native shell should reuse the same
+working backend rather than duplicate business logic.
 
 ### Decision
-- Keep the web app as the primary runtime and add Electron as an optional
-  Windows x64 host for the same built frontend and `startServer()` backend.
-- Run the backend in an Electron utility process, bind it to loopback on an
-  OS-selected port, and wait for its health check before loading the UI.
-- Keep renderer Node access disabled. Expose only the native download-folder
-  picker through a context-isolated preload and validate its sender in the
-  main process.
-- Store desktop settings, history, and logs in Electron user data. Package the
-  Python engine as a PyInstaller sidecar, but require users to install
-  FFmpeg/ffprobe separately until a compatible distribution/license decision
-  is made.
+- Keep the web app as the primary runtime and add a native WinUI 3 desktop
+  shell under `desktop/windows/YtdlFlow.Desktop/`.
+- Let the WinUI shell supervise the shared Node backend process, launch it on
+  loopback, and wait for the backend health check before the desktop UI is
+  considered ready.
+- Preserve the existing backend contracts: REST routes, WebSocket broadcasts,
+  queue management, history persistence, and Python engine orchestration stay
+  authoritative in Node.
+- Keep the desktop app focused on native Windows affordances: folder picker,
+  lifecycle management, local settings, and presentation of shared state.
+- Keep FFmpeg/ffprobe as external dependencies; the native shell does not
+  duplicate media logic or create a second Python engine pathway.
 
 ### Reason
-Reusing the existing application preserves API, WebSocket, and engine
-contracts and keeps browser mode working. The narrow native bridge avoids
-introducing Electron privileges into the React app.
+The desktop shell must be native WinUI 3 rather than a browser renderer or
+Electron wrapper. Reusing the same backend avoids fragmentation and keeps the
+WinUI app aligned with the repository's three-tier architecture.
 
 ### Consequences
-Desktop lifecycle and packaging must be verified independently from web CI.
-Users of the installer need FFmpeg/ffprobe available on their machine. The
-Windows installer is not considered verified until a packaged app has been
-built and installed in a clean environment.
+The desktop surface is now a C# XAML application rather than an Electron
+BrowserWindow. The repository must continue to validate the shared backend and
+Windows shell independently, and the final packaged app should verify FFmpeg
+availability on the host machine before the user attempts downloads.

@@ -10,7 +10,7 @@ YTDL Flow is a strict three-tier localhost application. Each tier owns a clear
 responsibility and communicates with its neighbor over an explicit contract.
 
 ```
-Browser tab or Electron window (optional Windows shell)
+Browser tab or native WinUI 3 desktop shell (Windows-only)
   ↓
 React SPA (same Vite build, TypeScript, Zustand)
   ↓
@@ -94,22 +94,18 @@ sequenceDiagram
 
 ## Windows desktop host (`desktop/`)
 
-- `main.mjs` enforces a single app instance, starts the backend in an Electron
-  utility process, waits for its health check before creating a window, and
-  shuts it down when the app exits.
-- `backend-runner.mjs` imports the same `startServer()` lifecycle as the web
-  launcher. The server binds to `127.0.0.1` on an OS-selected port; the
-  renderer continues to use the existing same-origin REST and WebSocket
-  contracts.
-- The BrowserWindow enables context isolation and sandboxing, disables
-  renderer Node integration, and only exposes `chooseDownloadDirectory`
-  through `preload.cjs`. The main process validates the sender frame and
-  checks `/api/status` before switching folders; unavailable or malformed
-  status fails closed.
-- The selected folder is persisted in Electron user data. History and logs
-  also use user-data paths; the packaged Python engine is a PyInstaller
-  sidecar under `resources/engine/`. FFmpeg/ffprobe are external prerequisites
-  and are intentionally not bundled.
+- The native desktop shell lives in `desktop/windows/YtdlFlow.Desktop/` and is
+  implemented in C# with WinUI 3 + XAML.
+- The desktop shell owns Windows UI, app lifecycle, backend supervision, and
+  native folder selection while the Node backend remains the source of truth
+  for validation, queueing, history, and the Python engine lifecycle.
+- A small Node helper (`desktop/backend-runner-stdio.mjs`) starts the shared
+  backend, waits for `/api/health`, and reports readiness as JSON over stdout
+  for the WinUI supervisor process.
+- The selected folder is persisted in the user's local application data; the
+  backend continues to own the authoritative download directory behavior and
+  history persistence. FFmpeg/ffprobe remain external prerequisites and are
+  intentionally not bundled by the native app shell.
 
 ## Python engine (`python-engine/`)
 

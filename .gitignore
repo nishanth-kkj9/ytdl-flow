@@ -64,6 +64,9 @@ web/test-output.txt
 # Agent and tool artifacts
 graphify-out
 .opencode
+.mcp.json
+.planning/
+performance/
 repomix-output.xml
 .review/
 analysis/

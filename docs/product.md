@@ -61,10 +61,11 @@ Media discovery
 
 - Web UI at `http://127.0.0.1:3000`: probe → confirm → download → live logs →
   history drawer, plus an engine diagnostics panel.
-- Windows x64 Electron host reuses that same frontend and backend; it provides
-  a native folder picker and persists desktop settings in the user's data
-  directory. The desktop host is packaged with a PyInstaller engine sidecar;
-  FFmpeg/ffprobe remain external prerequisites.
+- Native Windows desktop shell built with C# + WinUI 3 reuses the same frontend
+  and backend contracts; it provides a native folder picker and persists
+  desktop settings in the user's local app data. The desktop shell supervises
+  the shared backend and keeps the backend authoritative for queueing, history,
+  and Python engine coordination; FFmpeg/ffprobe remain external prerequisites.
 - REST API (`/api/*`) mirroring the UI's capabilities.
 - WebSocket one-way broadcast for progress/log/status events.
 - Server-persisted download history surviving restarts; job restoration on UI
