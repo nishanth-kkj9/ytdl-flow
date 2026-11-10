@@ -555,6 +555,12 @@ def test_cookie_opts_reach_download_opts(tmp_path, monkeypatch):
     jar = tmp_path / "cookies.txt"
     jar.write_text("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc\n")
     monkeypatch.setenv("YTDL_COOKIES_FILE", str(jar))
+    monkeypatch.delenv("FFMPEG_PATH", raising=False)
+    monkeypatch.setattr(
+        eng_mod.AudioDownloadEngine,
+        "_find_ffmpeg",
+        staticmethod(lambda: (str(tmp_path), str(tmp_path / "ffmpeg.exe"), str(tmp_path / "ffprobe.exe"))),
+    )
     eng_mod.AudioDownloadEngine._reset_cookies_cache()
     try:
         eng = eng_mod.AudioDownloadEngine(output_dir=str(tmp_path))

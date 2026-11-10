@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Dispatching;
 using YtdlFlow.Desktop.ViewModels;
 
 namespace YtdlFlow.Desktop;
@@ -10,8 +11,9 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
-        ViewModel = new MainViewModel();
+        ViewModel = new MainViewModel(DispatcherQueue.GetForCurrentThread());
         InitializeComponent();
+        Closed += OnClosed;
 
         if (AppWindow is not null)
         {
@@ -19,7 +21,32 @@ public sealed partial class MainWindow : Window
             AppWindow.Move(new Windows.Graphics.PointInt32(200, 120));
         }
 
-        _ = ViewModel.InitializeAsync();
+        StartInitialization();
+    }
+
+    private async void StartInitialization()
+    {
+        try
+        {
+            await ViewModel.InitializeAsync();
+        }
+        catch (Exception error)
+        {
+            ViewModel.StatusMessage = "The desktop backend could not be initialized.";
+            ViewModel.ErrorMessage = error.Message;
+        }
+    }
+
+    private async void OnClosed(object sender, WindowEventArgs e)
+    {
+        try
+        {
+            await ViewModel.ShutdownAsync();
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Debug.WriteLine($"Desktop shutdown failed: {error}");
+        }
     }
 
     private async void ProbeButton_Click(object sender, RoutedEventArgs e)

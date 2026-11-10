@@ -1,4 +1,5 @@
 import assert from "node:assert";
+import path from "node:path";
 import { test } from "node:test";
 
 // config.mjs reads env at module load. Each case imports a fresh module
@@ -46,15 +47,15 @@ test("config supports separate packaged-resource and user-data paths", async () 
     YTDL_DATA_DIR: "C:\\Users\\test\\AppData\\Local\\YTDL Flow\\data",
     YTDL_HISTORY_FILE: "C:\\Users\\test\\AppData\\Local\\YTDL Flow\\data\\history.json",
   });
-  assert.strictEqual(config.distDir, "C:\\app\\resources\\dist");
-  assert.strictEqual(config.engineEntry, "C:\\app\\resources\\engine\\ipc_main.py");
-  assert.strictEqual(config.engineExecutable, "C:\\app\\resources\\python\\python.exe");
+  assert.strictEqual(config.distDir, path.resolve("C:\\app\\resources\\dist"));
+  assert.strictEqual(config.engineEntry, path.resolve("C:\\app\\resources\\engine\\ipc_main.py"));
+  assert.strictEqual(config.engineExecutable, path.resolve("C:\\app\\resources\\python\\python.exe"));
   assert.deepStrictEqual(config.engineArgs, []);
-  assert.strictEqual(config.engineCwd, "C:\\app\\resources\\engine");
-  assert.strictEqual(config.downloadsDir, "C:\\Users\\test\\Videos\\YTDL Flow");
-  assert.strictEqual(config.logsDir, "C:\\Users\\test\\AppData\\Local\\YTDL Flow\\logs");
-  assert.strictEqual(config.dataDir, "C:\\Users\\test\\AppData\\Local\\YTDL Flow\\data");
-  assert.strictEqual(config.historyFile, "C:\\Users\\test\\AppData\\Local\\YTDL Flow\\data\\history.json");
+  assert.strictEqual(config.engineCwd, path.resolve("C:\\app\\resources\\engine"));
+  assert.strictEqual(config.downloadsDir, path.resolve("C:\\Users\\test\\Videos\\YTDL Flow"));
+  assert.strictEqual(config.logsDir, path.resolve("C:\\Users\\test\\AppData\\Local\\YTDL Flow\\logs"));
+  assert.strictEqual(config.dataDir, path.resolve("C:\\Users\\test\\AppData\\Local\\YTDL Flow\\data"));
+  assert.strictEqual(config.historyFile, path.resolve("C:\\Users\\test\\AppData\\Local\\YTDL Flow\\data\\history.json"));
 });
 
 test("config preserves the existing Python script invocation by default", async () => {

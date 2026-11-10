@@ -294,7 +294,7 @@ generate raster exports from the SVG at build time (tracked in
 
 ---
 
-## ADR-012 — Native WinUI 3 desktop host replaces the Electron shell
+## ADR-012 — Native WinUI 3 desktop host; Electron path retained
 
 ### Context
 The project needs a Windows-first desktop experience that is genuinely native,
@@ -305,7 +305,8 @@ working backend rather than duplicate business logic.
 
 ### Decision
 - Keep the web app as the primary runtime and add a native WinUI 3 desktop
-  shell under `desktop/windows/YtdlFlow.Desktop/`.
+  shell under `desktop/windows/YtdlFlow.Desktop/`, while retaining existing
+  Electron sources, scripts, and packaging workflows.
 - Let the WinUI shell supervise the shared Node backend process, launch it on
   loopback, and wait for the backend health check before the desktop UI is
   considered ready.
@@ -318,12 +319,15 @@ working backend rather than duplicate business logic.
   duplicate media logic or create a second Python engine pathway.
 
 ### Reason
-The desktop shell must be native WinUI 3 rather than a browser renderer or
+The native desktop shell must use WinUI 3 rather than a browser renderer or
 Electron wrapper. Reusing the same backend avoids fragmentation and keeps the
-WinUI app aligned with the repository's three-tier architecture.
+WinUI app aligned with the repository's three-tier architecture. Retaining
+the independent Electron path avoids coupling runtime stabilization to a
+separate packaging migration.
 
 ### Consequences
-The desktop surface is now a C# XAML application rather than an Electron
-BrowserWindow. The repository must continue to validate the shared backend and
-Windows shell independently, and the final packaged app should verify FFmpeg
-availability on the host machine before the user attempts downloads.
+The WinUI desktop surface is a C# XAML application. Existing Electron sources
+and packaging are not removed or changed by this decision. The repository must
+validate the shared backend and Windows shell independently, and the final
+packaged apps should verify FFmpeg availability on the host machine before the
+user attempts downloads.

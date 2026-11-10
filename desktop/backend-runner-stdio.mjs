@@ -1,23 +1,44 @@
 import { startServer } from "../web/server.mjs";
+import readline from "node:readline";
 
 let application;
-let shuttingDown = false;
+let shutdownPromise;
+const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 
-async function shutdown(exitCode = 0) {
-  if (shuttingDown) return;
-  shuttingDown = true;
+function shutdown(exitCode = 0) {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownPromise = (async () => {
+    try {
+      if (application) await application.close();
+      process.exitCode = exitCode;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[desktop-runner] Shutdown failed: ${message}`);
+      process.exitCode = 1;
+    } finally {
+      input.close();
+    }
+  })();
+  return shutdownPromise;
+}
 
+input.on("line", (line) => {
+  let request;
   try {
-    if (application) await application.close();
+    request = JSON.parse(line);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[desktop-runner] Shutdown failed: ${message}`);
-    process.exitCode = 1;
+    console.error("[desktop-runner] Ignoring malformed stdin request:", error);
     return;
   }
-
-  process.exitCode = exitCode;
-}
+  if (request?.type === "shutdown") {
+    void shutdown();
+  } else {
+    console.error("[desktop-runner] Ignoring unknown stdin request.");
+  }
+});
+input.on("close", () => {
+  if (application) void shutdown();
+});
 
 async function main() {
   const requestedPort = Number(process.argv[2] ?? process.env.PORT ?? 0);
@@ -36,7 +57,9 @@ async function main() {
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
+  console.error(`[desktop-runner] Startup failed: ${message}`);
   process.stdout.write(`${JSON.stringify({ type: "startup-error", message })}\n`);
   process.stdout.flush?.();
   process.exitCode = 1;
+  input.close();
 });
