@@ -40,6 +40,19 @@ input.on("close", () => {
   if (application) void shutdown();
 });
 
+process.stdin.on("error", (error) => {
+  console.error("[desktop-runner] Stdin error:", error instanceof Error ? error.message : String(error));
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[desktop-runner] Unhandled rejection:", reason instanceof Error ? reason.message : String(reason));
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[desktop-runner] Uncaught exception:", error instanceof Error ? error.message : String(error));
+  void shutdown(1);
+});
+
 async function main() {
   const requestedPort = Number(process.argv[2] ?? process.env.PORT ?? 0);
   application = await startServer({

@@ -24,6 +24,7 @@ public partial class MainViewModel : ObservableObject
     private readonly EngineEventClient _eventClient = new();
     private readonly DownloadQueue _downloadQueue = new();
     private readonly SemaphoreSlim _historyGate = new(1, 1);
+    private readonly SemaphoreSlim _statusGate = new(1, 1);
     private readonly DispatcherQueue _dispatcher;
     private readonly CancellationTokenSource _lifetime = new();
     private ProbeMetadata? _probeMetadata;
@@ -165,10 +166,42 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception error) when (IsBackendFailure(error))
         {
+            _initialized = false;
             BackendStatus = "Backend unavailable";
             EngineStatus = "Engine unavailable";
             ErrorMessage = error.Message;
             StatusMessage = $"Could not start the shared backend: {error.Message}";
+        }
+    }
+
+    private async Task EnsureBackendRunningAsync(CancellationToken cancellationToken)
+    {
+        if (_backendSupervisor.BackendAddress is { } address &&
+            !string.IsNullOrWhiteSpace(address.ToString()))
+        {
+            try
+            {
+                var health = await _backendService.GetHealthAsync(cancellationToken);
+                if (health.Ok)
+                {
+                    await _eventClient.StartAsync(address, cancellationToken);
+                    return;
+                }
+            }
+            catch (Exception error) when (IsBackendFailure(error))
+            {
+            }
+        }
+
+        StatusMessage = "Starting the local backend...";
+        var endpoint = await _backendSupervisor.StartAsync(DownloadDirectory, cancellationToken);
+        _backendService.SetBaseAddress(endpoint);
+        BackendStatus = "Node server running";
+        await _eventClient.StartAsync(endpoint, cancellationToken);
+        await RefreshBackendStatusAsync(cancellationToken);
+        if (_statusMonitor is null || _statusMonitor.IsCompleted)
+        {
+            _statusMonitor = MonitorBackendStatusAsync(_lifetime.Token);
         }
     }
 
@@ -192,6 +225,7 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = "Connecting to the backend event stream...";
         try
         {
+            await EnsureBackendRunningAsync(_lifetime.Token);
             await _eventClient.WaitUntilConnectedAsync(TimeSpan.FromSeconds(15), _lifetime.Token);
             StatusMessage = "Requesting metadata from the Python engine...";
             var requestId = await _backendService.ProbeAsync(probeUrl, _lifetime.Token);
@@ -386,6 +420,7 @@ public partial class MainViewModel : ObservableObject
         var submissionAttempted = false;
         try
         {
+            await EnsureBackendRunningAsync(_lifetime.Token);
             await _eventClient.WaitUntilConnectedAsync(TimeSpan.FromSeconds(15), _lifetime.Token);
             submissionAttempted = true;
             var request = new DownloadRequest
@@ -504,6 +539,7 @@ public partial class MainViewModel : ObservableObject
         {
             await _historyGate.WaitAsync(_lifetime.Token);
             gateAcquired = true;
+            await EnsureBackendRunningAsync(_lifetime.Token);
             await _backendService.ClearHistoryAsync(_lifetime.Token);
             History.Clear();
             HistoryStatusMessage = "Download history cleared. Downloaded files were not deleted.";
@@ -534,6 +570,7 @@ public partial class MainViewModel : ObservableObject
         var submissionAttempted = false;
         try
         {
+            await EnsureBackendRunningAsync(_lifetime.Token);
             await _eventClient.WaitUntilConnectedAsync(TimeSpan.FromSeconds(15), _lifetime.Token);
             submissionAttempted = true;
             await _backendService.SubmitDownloadAsync(CreateDownloadRequest(item), _lifetime.Token);
@@ -991,6 +1028,7 @@ public partial class MainViewModel : ObservableObject
         CancellationToken cancellationToken,
         bool markMissingUnknown = false)
     {
+        await _statusGate.WaitAsync(cancellationToken);
         try
         {
             var health = await _backendService.GetHealthAsync(cancellationToken);
@@ -1013,6 +1051,10 @@ public partial class MainViewModel : ObservableObject
             BackendStatus = "Backend unavailable";
             EngineStatus = "Engine status unavailable";
             ErrorMessage = error.Message;
+        }
+        finally
+        {
+            _statusGate.Release();
         }
     }
 
@@ -1046,7 +1088,7 @@ public partial class MainViewModel : ObservableObject
             switch (message.Type)
             {
                 case "engine_ready":
-                    EngineStatus = message.Ready == true ? "Engine ready" : "Python engine starting";
+                    EngineStatus = message.Ready is false ? "Python engine starting" : "Engine ready";
                     break;
                 case "engine_error":
                 case "fatal_error":

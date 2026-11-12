@@ -79,9 +79,11 @@ public sealed class DownloadHistoryRecord
     public string? Format { get; set; }
 
     [JsonPropertyName("size")]
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public long? Size { get; set; }
 
     [JsonPropertyName("duration")]
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public double? Duration { get; set; }
 
     [JsonPropertyName("url")]

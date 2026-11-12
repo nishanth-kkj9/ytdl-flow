@@ -187,7 +187,7 @@ public sealed partial class DownloadItem : ObservableObject
             return;
         }
 
-        if (downloaded is >= 0)
+        if (downloaded is > 0)
         {
             DownloadedBytes = downloaded.Value;
         }
@@ -197,7 +197,7 @@ public sealed partial class DownloadItem : ObservableObject
             TotalBytes = total.Value;
         }
 
-        if (speed is >= 0 && double.IsFinite(speed.Value))
+        if (speed is > 0 && double.IsFinite(speed.Value))
         {
             SpeedBytesPerSecond = speed.Value;
         }

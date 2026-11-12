@@ -293,7 +293,7 @@ public sealed class DownloadWorkflowTests
 
             return JsonResponse(
                 HttpStatusCode.OK,
-                """[{"id":"job-1","title":"A video","fmt":"mp4","size":123,"duration":10,"url":"https://youtu.be/abcdefghijk","downloaded_at":"2026-01-02T03:04:05.000Z","filepath":"C:\\downloads\\video.mp4","type":"video","status":"completed","thumbnail":"https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg"}]""");
+                """[{"id":"job-1","title":"A video","fmt":"mp4","size":"123","duration":"10","url":"https://youtu.be/abcdefghijk","downloaded_at":"2026-01-02T03:04:05.000Z","filepath":"C:\\downloads\\video.mp4","type":"video","status":"completed","thumbnail":"https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg"}]""");
         });
 
         await service.CancelDownloadAsync("job-1");
@@ -365,6 +365,12 @@ public sealed class DownloadWorkflowTests
         Assert.Equal(1000, item.TotalBytes);
         Assert.Equal(250, item.SpeedBytesPerSecond);
         Assert.Equal("sample.mp4", item.FileName);
+
+        // The engine's "finished" sentinel reports 0/0/0; it must not erase progress
+        item.ApplyProgress(0, 0, 0, null);
+        Assert.Equal(500, item.DownloadedBytes);
+        Assert.Equal(1000, item.TotalBytes);
+        Assert.Equal(250, item.SpeedBytesPerSecond);
 
         item.ApplyRetry("Transient network issue");
         Assert.Equal(DownloadStatus.Retrying, item.Status);
