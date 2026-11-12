@@ -16,6 +16,7 @@ desktop/windows/**/obj/
 **/.vs/
 **/AppPackages/
 **/Generated Files/
+**/TestResults/
 **/*.user
 **/*.userosscache
 **/*.suo

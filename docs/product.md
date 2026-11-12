@@ -72,6 +72,12 @@ Media discovery
   health before use, displays distinct backend/engine/WebSocket states, and
   gracefully stops its owned backend process on exit. Probe metadata arrives
   asynchronously through the correlated `probe_result` WebSocket event.
+- Native Download, Queue, and History pages use the existing REST and
+  WebSocket contracts for format/quality/trim submission, live progress,
+  cancellation, retry, reconnect recovery, and backend-persisted history.
+  Cancellation is confirmed by an event rather than the REST acknowledgment;
+  late results cannot change a cancelled row. Safe open/reveal actions are
+  limited to existing files inside the configured download directory.
 - Electron sources and packaging workflows remain in the repository and are
   not removed by the WinUI runtime work.
 - REST API (`/api/*`) mirroring the UI's capabilities.
@@ -106,7 +112,7 @@ Node only — never to Python or YouTube directly.
   README CI badge, further UX polish) — non-binding, listed in
   `docs/roadmap.md` under Ideas.
 
-The desktop host and packaging configuration are implemented, but a packaged
-installer and clean-machine install have not yet been verified locally. Only
-features actually implemented are described as current; anything else in this
-file is explicitly labeled planned or future.
+The native workflow is implemented, but a packaged installer and clean-machine
+install have not yet been verified locally. Only features actually implemented
+are described as current; anything else in this file is explicitly labeled
+planned or future.

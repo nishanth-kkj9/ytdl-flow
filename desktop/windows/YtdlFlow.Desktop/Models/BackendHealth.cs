@@ -28,4 +28,16 @@ public sealed class BackendJob
 
     [JsonPropertyName("status")]
     public string? Status { get; set; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; set; }
+
+    [JsonPropertyName("fmt")]
+    public string? Format { get; set; }
+
+    [JsonPropertyName("quality")]
+    public string? Quality { get; set; }
+
+    [JsonPropertyName("mode")]
+    public string? Mode { get; set; }
 }

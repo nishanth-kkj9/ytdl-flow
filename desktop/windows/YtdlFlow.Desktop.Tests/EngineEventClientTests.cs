@@ -38,6 +38,21 @@ public sealed class EngineEventClientTests
     }
 
     [Fact]
+    public async Task CorrelatesProbeErrorsThatArriveBeforeTheRequestIdIsObserved()
+    {
+        await using var client = new EngineEventClient();
+        client.DispatchMessage(Encoding.UTF8.GetBytes(
+            """{"type":"error","payload":{"id":"probe-error","error":"unavailable"}}"""));
+
+        var result = await client.WaitForProbeResultAsync(
+            "probe-error",
+            TimeSpan.FromSeconds(1));
+
+        Assert.Equal("error", result.Type);
+        Assert.Equal("unavailable", result.Message);
+    }
+
+    [Fact]
     public async Task ProbeWaitSupportsTimeoutAndCancellation()
     {
         await using var client = new EngineEventClient();

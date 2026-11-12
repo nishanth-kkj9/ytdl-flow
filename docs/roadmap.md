@@ -36,6 +36,11 @@
 - Product identity rename to **YTDL Flow** on user-facing surfaces
   (README, UI header, placeholder page, server banner, page title); logo
   reference established under `references/branding/`.
+- Native WinUI download workflow: Download, Queue, and History pages using
+  existing backend contracts; trim/options submission, live event updates,
+  cancel/retry, conservative reconnect reconciliation, backend-persisted
+  history, safe file actions, active-download close confirmation, and focused
+  workflow/API/file-service tests.
 
 ## In Progress
 

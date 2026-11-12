@@ -49,7 +49,7 @@ test("config supports separate packaged-resource and user-data paths", async () 
   });
   assert.strictEqual(config.distDir, path.resolve("C:\\app\\resources\\dist"));
   assert.strictEqual(config.engineEntry, path.resolve("C:\\app\\resources\\engine\\ipc_main.py"));
-  assert.strictEqual(config.engineExecutable, path.resolve("C:\\app\\resources\\python\\python.exe"));
+  assert.strictEqual(config.engineExecutable, "C:\\app\\resources\\python\\python.exe");
   assert.deepStrictEqual(config.engineArgs, []);
   assert.strictEqual(config.engineCwd, path.resolve("C:\\app\\resources\\engine"));
   assert.strictEqual(config.downloadsDir, path.resolve("C:\\Users\\test\\Videos\\YTDL Flow"));

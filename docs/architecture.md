@@ -104,11 +104,27 @@ sequenceDiagram
 - The WinUI shell uses `/api/probe` to submit a probe, then correlates the
   returned request ID with the asynchronous `probe_result` WebSocket event;
   the initial REST response is not metadata.
+- The native Download page submits typed `/api/download` requests with a
+  client-generated stable ID. A queue row is registered before the request so
+  fast WebSocket events cannot arrive before the UI row; progress, retry,
+  cancellation, error, and result events update that row without resurrecting
+  terminal states. Cancellation requested before the HTTP acknowledgment is
+  deferred until submission is confirmed.
+- One existing status monitor reconciles typed `/api/status.activeJobs`
+  snapshots. Missing jobs after a reconnect are shown as unknown until an
+  active-job snapshot or backend history resolves them; failed status requests
+  do not alter local queue state. Retry creates a new ID and preserves the
+  original attempt and its trim/metadata options.
+- The History page reads and clears only `/api/history`; the server remains the
+  sole persistence owner. File open/reveal actions require an existing file
+  canonically contained by the configured download directory and reject
+  reparse-point paths.
 - The selected folder is persisted in the user's local application data; the
   backend continues to own the authoritative download directory behavior and
-  history persistence. The desktop presentation is native XAML and does not
-  embed the React SPA. FFmpeg/ffprobe remain external prerequisites and are
-  intentionally not bundled by the native app shell.
+  history persistence. Download, Queue, and History are native XAML pages; the
+  desktop presentation does not embed the React SPA. FFmpeg/ffprobe remain
+  external prerequisites and are intentionally not bundled by the native app
+  shell.
 - Existing Electron sources and packaging scripts remain in the repository;
   the WinUI runtime does not remove or alter that separate path.
 

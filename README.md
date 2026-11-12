@@ -53,7 +53,7 @@
 YTDL Flow is a **localhost-only** YouTube downloader that runs entirely on your machine. It provides:
 
 - **Web UI** at `http://127.0.0.1:3000` for probing, downloading, and managing history
-- **Windows desktop app** with a native download-folder picker (optional)
+- **Windows desktop app** with native Download, Queue, and History pages
 - **REST API** for programmatic access
 - **WebSocket** for real-time progress and status updates
 - **Concurrent downloads** (up to 5 workers) with full queue management
@@ -87,7 +87,7 @@ YTDL Flow is a **localhost-only** YouTube downloader that runs entirely on your 
 - **Trim:** Optional start/end trim (seconds or `HH:MM:SS` / `MM:SS` format) via FFmpeg
 - **Format verification:** Post-download readback confirms codec and stream info
 - **Cover art:** Fetches and embeds highest-resolution YouTube thumbnail automatically
-- **Download queue:** Multiple concurrent downloads with cancel and retry capabilities
+- **Download queue:** Multiple concurrent downloads with cancel and retry capabilities in the web and native apps
 - **Live progress:** Real-time speed, ETA, animated waveform visualizations
 - **Download history:** Persistent log (capped at 100 records) with file open/reveal
 - **Bot detection bypass:** Uses multiple YouTube player clients for reliable extraction
@@ -255,11 +255,17 @@ The Vite dev server automatically proxies `/api`, `/downloads`, and `/ws` to the
 
 The native Windows desktop shell is a WinUI 3 application. It supervises the
 shared Node backend on a dynamic loopback port and uses the existing REST and
-WebSocket contracts. The older Electron source, scripts, and release workflow
-remain in the repository; this runtime stabilization does not remove or change
-that packaging path. **FFmpeg/ffprobe are not bundled**; install FFmpeg
-separately and make it available on `PATH`, or configure
-`FFMPEG_PATH`/`FFMPEG_HOME`. Deno and YouTube cookies remain optional
+WebSocket contracts. The Download page supports metadata probing, audio/video
+format and quality selection, optional trimming, and queue submission. The
+Queue page shows live progress, supports cancellation and retry, and reconciles
+active jobs after a WebSocket reconnect. The History page reads the backend's
+persistent history and offers safe open/reveal actions for files still inside
+the configured download folder; clearing history does not delete downloaded
+files. Closing the app with active jobs requires confirmation because it stops
+the shared backend. The older Electron source, scripts, and release workflow
+remain in the repository as a separate packaging path. **FFmpeg/ffprobe are not
+bundled**; install FFmpeg separately and make it available on `PATH`, or
+configure `FFMPEG_PATH`/`FFMPEG_HOME`. Deno and YouTube cookies remain optional
 user-managed prerequisites.
 
 To develop and test the native desktop shell on Windows, install the .NET 10
@@ -283,8 +289,9 @@ first with `npm run build`. Native service tests run with:
 
 The WinUI app stores its settings under the user's local application data and
 passes desktop-specific data, log, and download paths to the backend. Its
-native folder picker refuses changes while downloads are active. Web mode and
-its default paths remain unchanged.
+native folder picker refuses changes while downloads are active. Queue state is
+kept in the desktop session; successful download history remains backend-owned
+and persistent. Web mode and its default paths remain unchanged.
 
 ### Running Tests
 

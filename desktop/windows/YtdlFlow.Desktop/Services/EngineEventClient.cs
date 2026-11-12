@@ -312,7 +312,7 @@ public sealed class EngineEventClient : IAsyncDisposable
         }
 
         var engineEvent = new EngineEventMessage(type, payload.Clone());
-        if (type == "probe_result" && !string.IsNullOrWhiteSpace(engineEvent.Id))
+        if ((type is "probe_result" or "error") && !string.IsNullOrWhiteSpace(engineEvent.Id))
         {
             lock (_probeLock)
             {

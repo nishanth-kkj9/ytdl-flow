@@ -111,6 +111,22 @@ Preserve:
 Do not perform unrelated cleanup. Do not introduce new frameworks or
 configuration without an approved decision (record it in `docs/decisions.md`).
 
+### Windows desktop workflow
+
+- Keep the WinUI shell native XAML and use the shared Node REST/WebSocket
+  contracts; do not embed the React SPA or duplicate backend history storage.
+- Preserve `MainViewModel` as the owner of the supervised backend, single
+  status monitor, and event-client lifecycle. Do not add a second polling loop.
+- Queue transitions must remain terminal-safe. Treat cancel HTTP responses as
+  acknowledgments only; wait for the backend event before showing Cancelled.
+  Reconcile active-job snapshots conservatively and leave local state unchanged
+  when a status request fails.
+- Native file actions must canonicalize paths, keep them within the configured
+  download directory, reject symlink/junction traversal, and use safe process
+  APIs rather than shell command strings.
+- Run the focused WinUI service suite with
+  `dotnet test desktop\windows\YtdlFlow.Desktop.Tests\YtdlFlow.Desktop.Tests.csproj --configuration Release`.
+
 ---
 
 ## VERIFICATION
