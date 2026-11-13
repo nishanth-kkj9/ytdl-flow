@@ -12,7 +12,7 @@ Browser SPA → REST /api/* + one-way WS /ws → Express → NDJSON stdio → Py
 
 ## Primary data flows
 
-Probe: `UrlInput → store → POST /api/probe → validate → EngineManager.sendCommand → NDJSON → ipc_main → engine.probe (15s socket, 3 retries, 60s deadline) → probe_result → EventBus → WS → useEngineEvents → store.probeInFlight=false + MetadataPanel`. Store watchdog (60 s) can pre-empt; late result self-heals (N-09).
+Probe: `UrlInput → store (register client id) → POST /api/probe → validate → EngineManager.sendCommand → NDJSON → ipc_main (60 s absolute deadline from acceptance) → engine.probe (15s socket, 3 retries, capped by deadline) → probe_result → EventBus → WS → useEngineEvents (id match required; stale events ignored) → store.probeInFlight=false + MetadataPanel`. The browser watchdog (75 s, armed only after the REST ack) is owned by the request id, so a late result cannot overwrite a visible timeout. WinUI correlates the same id with a 90 s timeout.
 
 Download: `POST /api/download (format/quality/trim) → route 400s (incl. half-open trim reject) → bounded pool (max 5) → NDJSON → ThreadPoolExecutor → yt-dlp fetch + FFmpeg + mutagen tag + verify_format → progress/download_retry/result+warnings → EventBus → WS → store queue/history; historyPersistence saves server-side (dedupe by id)`.
 

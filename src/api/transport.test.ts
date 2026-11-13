@@ -20,6 +20,24 @@ describe("web transport errors", () => {
     await expect(invoke("probe_url", { url: "https://example.com" }))
       .rejects.toThrow("Gateway unavailable");
   });
+
+  it("sends the client probe id so the WS result can be correlated (N-09)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ id: "client-probe-1" }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await invoke("probe_url", { url: "https://example.com", id: "client-probe-1" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/probe",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ url: "https://example.com", id: "client-probe-1" }),
+      }),
+    );
+  });
 });
 
 // ── WS connection-state tracking ─────────────────────────────────────────────

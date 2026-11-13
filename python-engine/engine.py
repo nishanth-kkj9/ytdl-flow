@@ -1706,11 +1706,16 @@ class AudioDownloadEngine:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def probe(self, url: str) -> tuple[dict | None, str]:
+    def probe(self, url: str, deadline: float | None = None) -> tuple[dict | None, str]:
         """
         Fetch video metadata without downloading.
         Tries multiple player clients for maximum compatibility.
         Returns (info_dict, "") on success, (None, error_msg) on failure.
+
+        `deadline` is an absolute `time.monotonic()` value owned by the IPC
+        layer (60 s from command acceptance, including executor queue wait).
+        The loop never starts or continues work past it, and caps its
+        back-off sleep to the remaining budget.
         """
         opts = {
             "quiet":         True,
@@ -1740,11 +1745,24 @@ class AudioDownloadEngine:
         # without any process-global redirection.
         opts["logger"] = _YdlLogCollector()
         probe_started = time.monotonic()
+        if deadline is None:
+            deadline = probe_started + 60.0
+        timed_out = False
         for attempt in range(3):
+            # Absolute deadline: never start an attempt the caller has already
+            # given up on (including a worker that waited in the executor queue).
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
             try:
                 with YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
                 if info:
+                    # A success that lands past the deadline is stale by
+                    # contract — report timeout instead of a late success.
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                        break
                     applog.log_probe(
                         url,
                         info.get("title", "?"),
@@ -1759,13 +1777,22 @@ class AudioDownloadEngine:
                 # active bot-check only hardens the block.
                 if is_bot_detection_error(last_err):
                     break
-                # F-11: deadline — once 60 s of wall time is spent, report the
-                # last error now instead of looping through the remaining
-                # attempts (the client watchdog fires at 60 s anyway).
-                if time.monotonic() - probe_started > 60:
+                # F-11: deadline — once the budget is spent, report now instead
+                # of looping through the remaining attempts.
+                if time.monotonic() >= deadline:
+                    timed_out = True
                     break
                 if attempt < 2:
-                    time.sleep(1.5 * (attempt + 1))
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        timed_out = True
+                        break
+                    time.sleep(min(1.5 * (attempt + 1), remaining))
+
+        if timed_out:
+            timeout_msg = "Probe timed out after 60s."
+            applog.log_probe_error(url, "ProbeTimeout", timeout_msg)
+            return None, timeout_msg
 
         applog.log_probe_error(url, classify_error_type(last_err), last_err)
         # BOT-FIX: surface the actionable cookie/pacing hint to the UI

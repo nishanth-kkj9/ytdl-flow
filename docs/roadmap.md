@@ -56,6 +56,12 @@
 - **N-08** completed: `trim_start` without `trim_end` returns 400.
 - **N-10** completed: smoke tests assert the CSP header and its connect-src
   sources in CI.
+- **N-09** completed: probe requests carry a client id end-to-end; the browser
+  registers it before the REST call, ignores stale `probe_result`/`error`
+  events, and owns a 75 s post-ack watchdog. The engine enforces a 60 s
+  absolute deadline from command acceptance (including executor queue wait) and
+  reports `ProbeTimeout` instead of a late success. WinUI keeps its 90 s
+  correlation timeout.
 
 ## In Progress
 
@@ -66,9 +72,6 @@
 All items below are documented, evidence-based gaps from
 `docs/codebase/CONCERNS.md` (Round 3/4 sections) — small, low-severity:
 
-- **N-09** — probe watchdog/deadline race polish (needs a consistent timeout
-  contract plus boundary tests; a late result must not overwrite a visible
-  timeout).
 - **N-11** — include `thumbnail` in server-persisted history records (needs a
   protocol change; do not add arbitrary thumbnail URLs).
 

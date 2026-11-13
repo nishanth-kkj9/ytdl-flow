@@ -568,3 +568,71 @@ def test_cookie_opts_reach_download_opts(tmp_path, monkeypatch):
     finally:
         eng_mod.AudioDownloadEngine._reset_cookies_cache()
         monkeypatch.delenv("YTDL_COOKIES_FILE", raising=False)
+
+
+# ── Probe absolute deadline (N-09) ───────────────────────────────────────────
+
+def test_probe_does_not_start_extraction_after_deadline(monkeypatch):
+    """An expired deadline must short-circuit before touching yt-dlp."""
+    import time
+    import engine as eng_mod
+    constructed = {"count": 0}
+
+    class ExplodingYDL:
+        def __init__(self, *_a, **_kw):
+            constructed["count"] += 1
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", ExplodingYDL)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=time.monotonic() - 1,
+    )
+
+    assert info is None
+    assert "timed out" in error.lower()
+    assert constructed["count"] == 0, "expired probe must not construct yt-dlp"
+
+
+def test_probe_caps_retry_sleep_to_remaining_budget(monkeypatch):
+    """Back-off must never sleep past the deadline, and the probe must stop."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    sleeps: list[float] = []
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    def recording_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    class FailingYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            raise RuntimeError("temporary network blip")
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", FailingYDL)
+    monkeypatch.setattr(eng_mod.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(eng_mod.time, "sleep", recording_sleep)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=clock["now"] + 0.05,
+    )
+
+    assert info is None
+    assert "timed out" in error.lower()
+    assert len(sleeps) == 1, "must not retry after the budget is spent"
+    assert abs(sleeps[0] - 0.05) < 1e-6, f"slept past the deadline: {sleeps[0]}"

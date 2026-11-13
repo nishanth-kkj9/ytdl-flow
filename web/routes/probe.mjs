@@ -18,7 +18,14 @@ export function probeRouter(engineManager) {
     if (!isYouTubeUrl(url)) {
       return res.status(400).json({ error: "Only YouTube URLs are supported" });
     }
-    const id = randomUUID();
+    // The browser generates the probe id and registers it BEFORE the REST
+    // call, so a fast probe_result can never arrive before the request is
+    // known locally. Echo the same id back and forward it to the engine.
+    // Omitted ids still get a server-generated one (WinUI/legacy clients).
+    const id = String(req.body?.id || "") || randomUUID();
+    if (!/^[\w\-:]{1,128}$/.test(id)) {
+      return res.status(400).json({ error: "Invalid id: must be 1-128 chars of [A-Za-z0-9_-:]" });
+    }
     try {
       engineManager.sendCommand({ cmd: "probe", id, url });
       return res.json({ id });

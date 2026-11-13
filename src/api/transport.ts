@@ -194,7 +194,9 @@ export async function invoke<T = any>(command: string, args?: Record<string, any
   const base = "";
   switch (command) {
     case "probe_url":
-      return webFetch(`${base}/api/probe`, "POST", { url: args?.url });
+      // The client id is registered locally before this call, so the WS
+      // probe_result can be correlated even if it arrives before the ack.
+      return webFetch(`${base}/api/probe`, "POST", { url: args?.url, id: args?.id });
     case "start_download":
       return webFetch(`${base}/api/download`, "POST", {
         url: args?.url,

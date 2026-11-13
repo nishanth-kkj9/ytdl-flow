@@ -33,14 +33,14 @@ sequenceDiagram
     participant Eng as Python engine
     participant YT as yt-dlp / FFmpeg
 
-    UI->>API: POST /api/probe (YouTube URL)
-    API->>API: validate URL allowlist, rate limit
-    API->>Eng: probe request (NDJSON)
-    Eng->>YT: metadata extraction
+    UI->>API: POST /api/probe (YouTube URL + client request id)
+    API->>API: validate URL allowlist + id, rate limit
+    API->>Eng: probe request (NDJSON, same id)
+    Eng->>YT: metadata extraction (60 s absolute deadline)
     YT-->>Eng: title, duration, formats, thumbnail
-    Eng-->>API: ProbeResult
+    Eng-->>API: ProbeResult (same id)
     API-->>UI: 200 { id }
-    API-->>UI: WebSocket probe_result (metadata)
+    API-->>UI: WebSocket probe_result (metadata; UI ignores non-matching ids)
     UI->>API: POST /api/download (format, quality, trim)
     API->>Mgr: enqueue job (worker pool, max 5)
     Mgr->>Eng: download request (NDJSON)

@@ -92,6 +92,46 @@ function request(app, method, path, body) {
   console.log("✓ probe: valid url -> 200 + command");
 }
 
+// Test 3a: client-supplied id is echoed and forwarded (N-09)
+{
+  const engine = makeEngine();
+  const app = makeApp(probeRouter(engine));
+  const res = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    id: "probe:client-1",
+  });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.id, "probe:client-1", "Must echo the client id");
+  assert.strictEqual(engine.sent[0].id, "probe:client-1", "Must forward the client id");
+  console.log("✓ probe: client id echoed + forwarded");
+}
+
+// Test 3b: invalid client id -> 400, no command
+{
+  const engine = makeEngine();
+  const app = makeApp(probeRouter(engine));
+  const res = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    id: "bad id!",
+  });
+  assert.strictEqual(res.status, 400, "Invalid id should be 400");
+  assert.strictEqual(engine.sent.length, 0, "No command should be sent");
+  console.log("✓ probe: invalid id -> 400");
+}
+
+// Test 3c: omitted id gets a server-generated id (WinUI/legacy clients)
+{
+  const engine = makeEngine();
+  const app = makeApp(probeRouter(engine));
+  const res = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  });
+  assert.strictEqual(res.status, 200);
+  assert.match(res.body.id, /^[\w\-:]{1,128}$/);
+  assert.strictEqual(engine.sent[0].id, res.body.id);
+  console.log("✓ probe: omitted id -> generated + forwarded");
+}
+
 // ── Download route ───────────────────────────────────────────────────────────
 
 // Test 4: missing url -> 400

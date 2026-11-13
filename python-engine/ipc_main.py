@@ -16,6 +16,7 @@ import os
 import shutil
 import sys
 import threading
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -207,7 +208,18 @@ def _write_result(id_: str, result: DownloadResult) -> None:
     _write_message(payload)
 
 
-def _probe(url: str, id_: str) -> None:
+_PROBE_BUDGET_S = 60.0
+_PROBE_TIMEOUT_MESSAGE = "Probe timed out after 60s."
+
+
+def _probe(url: str, id_: str, deadline: float | None = None) -> None:
+    # N-09: the 60 s budget starts when the command is ACCEPTED, not when a
+    # worker picks it up. A probe that waited in the 2-worker queue past the
+    # deadline must fail fast instead of starting a yt-dlp extraction the
+    # browser watchdog has already abandoned.
+    if deadline is not None and time.monotonic() >= deadline:
+        _write_error(id_, "ProbeTimeout", _PROBE_TIMEOUT_MESSAGE)
+        return
     # Circuit breaker: skip the yt-dlp extraction entirely while cooling
     # down — each attempt would fail AND harden YouTube's IP block.
     blocked = _bot_breaker_check()
@@ -216,8 +228,13 @@ def _probe(url: str, id_: str) -> None:
         return
     try:
         engine = AudioDownloadEngine()
-        info, error = engine.probe(url)
+        info, error = engine.probe(url, deadline=deadline)
         if info is not None:
+            # A success that lands after the absolute deadline is stale by
+            # contract — report the timeout so every layer agrees.
+            if deadline is not None and time.monotonic() >= deadline:
+                _write_error(id_, "ProbeTimeout", _PROBE_TIMEOUT_MESSAGE)
+                return
             _bot_breaker_success()
             _write_message({
                 "type": "probe_result",
@@ -234,12 +251,20 @@ def _probe(url: str, id_: str) -> None:
             elif not error:
                 error = "Probe returned no info; verify network, yt-dlp, and URL compatibility."
             error_type = classify_error_type(error)
+            # Latch the breaker from the ORIGINAL classification before the
+            # deadline relabel below, so a late bot-check still trips cooldown.
             if error_type == "BotDetectionError":
                 _bot_breaker_failure(error)
+            if deadline is not None and time.monotonic() >= deadline:
+                error_type = "ProbeTimeout"
+                error = _PROBE_TIMEOUT_MESSAGE
             # NOTE: engine.probe() already appends bot_fix_hint() for
             # BotDetectionError — do not append again here (no double hint).
             _write_error(id_, error_type, error)
     except Exception as exc:
+        if deadline is not None and time.monotonic() >= deadline:
+            _write_error(id_, "ProbeTimeout", _PROBE_TIMEOUT_MESSAGE)
+            return
         _write_error(id_, "ProbeError", f"{type(exc).__name__}: {exc}")
 
 
@@ -440,7 +465,9 @@ def _handle_command(command: dict[str, Any]) -> None:
         if not id_ or not url:
             _write_error(id_, "InvalidCommand", "probe command requires 'id' and 'url'")
             return
-        _PROBE_EXECUTOR.submit(_probe, url, id_)
+        # Start the budget at acceptance so executor queue wait counts.
+        deadline = time.monotonic() + _PROBE_BUDGET_S
+        _PROBE_EXECUTOR.submit(_probe, url, id_, deadline)
     elif cmd == "cancel":
         _cancel(command)
     elif cmd == "jobs":

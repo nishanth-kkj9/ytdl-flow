@@ -169,7 +169,7 @@ def test_probe_reports_missing_yt_dlp_from_the_running_interpreter(monkeypatch):
     import ipc_main
 
     class NoInfoEngine:
-        def probe(self, _url):
+        def probe(self, _url, deadline=None):
             return None, ""
 
     buf = io.StringIO()
@@ -182,3 +182,117 @@ def test_probe_reports_missing_yt_dlp_from_the_running_interpreter(monkeypatch):
     assert msg["type"] == "error"
     assert "yt-dlp is not installed in the Python interpreter running the engine" in msg["error"]
     assert "pip install -r python-engine/requirements.lock" in msg["error"]
+
+
+# ── Probe lifecycle: request correlation + 60 s absolute deadline (N-09) ─────
+
+def _capture_probe(url: str, id_: str, deadline=None, engine_cls=None, *, monkeypatch):
+    import io
+    import json
+    import ipc_main
+
+    if engine_cls is not None:
+        monkeypatch.setattr(ipc_main, "AudioDownloadEngine", engine_cls)
+    buf = io.StringIO()
+    monkeypatch.setattr(ipc_main, "_ORIGINAL_STDOUT", buf)
+    ipc_main._probe(url, id_, deadline)
+    lines = [l for l in buf.getvalue().strip().splitlines() if l.strip()]
+    assert len(lines) == 1, f"probe must emit exactly one terminal reply, got {lines}"
+    return json.loads(lines[0])
+
+
+def test_probe_command_forwards_client_id_and_acceptance_deadline(monkeypatch):
+    """The engine must echo the client id and start the budget at acceptance."""
+    import ipc_main
+
+    captured = {}
+
+    class FakeExecutor:
+        def submit(self, fn, *args):
+            captured["fn"] = fn
+            captured["args"] = args
+
+    monkeypatch.setattr(ipc_main, "_PROBE_EXECUTOR", FakeExecutor())
+    before = __import__("time").monotonic()
+    ipc_main._handle_command({
+        "cmd": "probe",
+        "id": "client-probe-1",
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    })
+
+    assert captured["fn"] is ipc_main._probe
+    url, id_, deadline = captured["args"]
+    assert url == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    assert id_ == "client-probe-1"
+    assert deadline is not None
+    assert before + 59.0 <= deadline <= before + 61.0
+
+
+def test_probe_expired_in_queue_emits_timeout_without_constructing_engine(monkeypatch):
+    """A queued probe that starts past its deadline must not run yt-dlp."""
+    import time
+
+    class ExplodingEngine:
+        def __init__(self):
+            raise AssertionError("engine must not be constructed after deadline")
+
+    msg = _capture_probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "probe-late",
+        deadline=time.monotonic() - 1,
+        engine_cls=ExplodingEngine,
+        monkeypatch=monkeypatch,
+    )
+    assert msg["type"] == "error"
+    assert msg["id"] == "probe-late"
+    assert msg["error_type"] == "ProbeTimeout"
+
+
+def test_probe_success_past_deadline_is_reported_as_timeout(monkeypatch):
+    """Even a successful extraction cannot beat the absolute deadline."""
+    import ipc_main
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(ipc_main.time, "monotonic", lambda: clock["now"])
+
+    class LateSuccessEngine:
+        def probe(self, _url, deadline=None):
+            # Extraction succeeds, but only after the deadline elapsed.
+            clock["now"] = (deadline or clock["now"]) + 1
+            return {"title": "Late"}, ""
+
+    msg = _capture_probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "probe-late-success",
+        deadline=1060.0,
+        engine_cls=LateSuccessEngine,
+        monkeypatch=monkeypatch,
+    )
+    assert msg["type"] == "error"
+    assert msg["id"] == "probe-late-success"
+    assert msg["error_type"] == "ProbeTimeout"
+
+
+def test_probe_forwards_deadline_to_engine_and_keeps_id(monkeypatch):
+    """The IPC layer must pass the deadline through and correlate the reply."""
+    import time
+
+    seen = {}
+
+    class RecordingEngine:
+        def probe(self, _url, deadline=None):
+            seen["deadline"] = deadline
+            return {"title": "T", "webpage_url": "https://youtu.be/x"}, ""
+
+    deadline = time.monotonic() + 30
+    msg = _capture_probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "probe-ok",
+        deadline=deadline,
+        engine_cls=RecordingEngine,
+        monkeypatch=monkeypatch,
+    )
+    assert seen["deadline"] == deadline
+    assert msg["type"] == "probe_result"
+    assert msg["id"] == "probe-ok"
+    assert msg["success"] is True

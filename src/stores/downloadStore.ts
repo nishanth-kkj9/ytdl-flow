@@ -24,12 +24,19 @@ export interface LogEntry {
 }
 
 let activeProbeTimeout: ReturnType<typeof setTimeout> | undefined;
+// The probe request that owns activeProbeTimeout. A result/error for any
+// other id is stale and must not clear the current request's watchdog.
+let activeProbeRequestId: string | null = null;
 
-function clearProbeTimeout(): void {
+function clearProbeTimeout(requestId?: string): void {
+  // With an id, only the owning request may clear the timer. Without one,
+  // clear the active request (used when replacing a probe).
+  if (requestId !== undefined && requestId !== activeProbeRequestId) return;
   if (activeProbeTimeout !== undefined) {
     clearTimeout(activeProbeTimeout);
     activeProbeTimeout = undefined;
   }
+  activeProbeRequestId = null;
 }
 
 export type LogLevel = LogEntry["level"];
@@ -72,6 +79,8 @@ interface DownloadState {
   probeError: string | null;
   /** True from probeUrl() until the WS probe_result/error arrives (F-11). */
   probeInFlight: boolean;
+  /** Id of the probe request the UI is waiting for (N-09 correlation). */
+  probeRequestId: string | null;
   engineStatus: EngineStatus;
   /**
    * Cookie-auth state from the engine (source only, never contents).
@@ -113,7 +122,8 @@ interface DownloadState {
   ) => void;
   setStatusMessage: (message: string) => void;
   setMetadataResult: (result: MetadataResult | null) => void;
-  clearProbeTimeout: () => void;
+  /** Clear the watchdog; pass the owning request id to reject stale events. */
+  clearProbeTimeout: (requestId?: string) => void;
   addLog: (message: string, level?: "info" | "warn" | "error") => void;
   clearLogs: () => void;
   setWsConnected: (connected: boolean) => void;
@@ -137,6 +147,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   probeInfo: null,
   probeError: null,
   probeInFlight: false,
+  probeRequestId: null,
   engineStatus: "starting",
   cookieState: null,
   botBreaker: null,
@@ -269,30 +280,68 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
 
   probeUrl: async (url) => {
     clearProbeTimeout();
-    set({ statusMessage: "Probing URL...", probeInfo: null, probeError: null, probeInFlight: true });
+    // Register the id BEFORE the REST call: the engine can emit probe_result
+    // before the HTTP ack returns, and the WS handler must already know it.
+    const requestId = generateId();
+    activeProbeRequestId = requestId;
+    set({
+      statusMessage: "Probing URL...",
+      probeInfo: null,
+      probeError: null,
+      probeInFlight: true,
+      probeRequestId: requestId,
+    });
+    let confirmedId = requestId;
     try {
-      await invoke("probe_url", { url });
+      const ack = await invoke<{ id?: string }>("probe_url", { url, id: requestId });
+      // Prefer the server's echo (it may have generated an id if the client
+      // one was omitted by an older transport).
+      if (typeof ack?.id === "string" && ack.id) confirmedId = ack.id;
       get().addLog(`Probe requested: ${url}`);
     } catch (error) {
-      clearProbeTimeout();
-      set({ statusMessage: "Probe failed.", probeError: String(error), probeInFlight: false });
+      // An early WS result may have already finished this request, or a newer
+      // probe may have replaced it. A stale REST failure must not overwrite
+      // that state with a failure for a request nobody is waiting on.
+      if (activeProbeRequestId !== requestId) {
+        get().addLog(`Ignored stale probe_url error: ${String(error)}`, "warn");
+        return;
+      }
+      clearProbeTimeout(requestId);
+      set({
+        statusMessage: "Probe failed.",
+        probeError: String(error),
+        probeInFlight: false,
+        probeRequestId: null,
+      });
       get().addLog(`probe_url error: ${String(error)}`, "error");
       return;
     }
-    // F-11: the REST ack returns immediately; the RESULT arrives over WS.
-    // Bind the spinner to the actual probe lifecycle (cleared by the WS
-    // handlers in useEngineEvents), and never let a lost event leave it
-    // spinning forever — a 60 s watchdog clears it with an honest message.
+    // A result may already have resolved (and cleared) this request while the
+    // REST call was in flight — never arm a watchdog for a finished probe.
+    if (activeProbeRequestId !== requestId) return;
+    if (confirmedId !== requestId) {
+      activeProbeRequestId = confirmedId;
+      set({ probeRequestId: confirmedId });
+    }
+    // F-11/N-09: the REST ack returns immediately; the RESULT arrives over WS.
+    // The watchdog is owned by this request id and fires 75 s after the ack,
+    // leaving margin over the engine's 60 s budget. A lost event therefore
+    // can't leave the spinner up forever, and a late result for this id can
+    // never overwrite the visible timeout (it is rejected as stale).
     activeProbeTimeout = setTimeout(() => {
-      if (useDownloadStore.getState().probeInFlight) {
+      if (activeProbeRequestId !== confirmedId) return;
+      activeProbeTimeout = undefined;
+      activeProbeRequestId = null;
+      const state = useDownloadStore.getState();
+      if (state.probeInFlight && state.probeRequestId === confirmedId) {
         useDownloadStore.setState({
           probeInFlight: false,
-          probeError: "Probe timed out (60s). Check the engine log and retry.",
+          probeRequestId: null,
+          probeError: "Probe timed out (75s). Check the engine log and retry.",
           statusMessage: "Probe timed out.",
         });
       }
-      activeProbeTimeout = undefined;
-    }, 60_000);
+    }, 75_000);
   },
 
   setSelectedMode: (mode) => set({
@@ -311,8 +360,8 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
     }),
   setStatusMessage: (statusMessage) => set({ statusMessage }),
   setMetadataResult: (result) => set({ metadataResult: result }),
-  clearProbeTimeout: () => {
-    clearProbeTimeout();
+  clearProbeTimeout: (requestId) => {
+    clearProbeTimeout(requestId);
   },
   addLog: (message, level = "info") => set((state) => {
     // Drop exact duplicates of the most recent entry. React StrictMode mounts

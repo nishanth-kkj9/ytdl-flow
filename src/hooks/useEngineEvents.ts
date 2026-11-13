@@ -134,27 +134,48 @@ export function useEngineEvents() {
 
         switch (payload.type) {
           case "probe_result": {
-            const info = payload.info as Record<string, unknown>;
-            if (info) {
-              useDownloadStore.getState().clearProbeTimeout();
-              setProbeInfo({
-                id,
-                title: String(info.title ?? "Unknown title"),
-                uploader: String(info.uploader ?? "Unknown uploader"),
-                duration:
-                  info.duration != null && Number.isFinite(Number(info.duration))
-                    ? Number(info.duration)
-                    : undefined,
-                thumbnail: String(info.thumbnail ?? ""),
-                url: String(info.webpage_url ?? ""),
-                description: String(info.description ?? ""),
-                formats: parseFormats(info.formats),
-              });
-              addLog(`Probe success: ${String(info.title ?? "unknown")}`);
-              setStatusMessage("Probe complete.");
-              // F-11: the spinner is bound to the real probe lifecycle.
-              useDownloadStore.setState({ probeInFlight: false });
+            // N-09: only the request currently being awaited may update probe
+            // UI. A late result from a replaced/timed-out probe is stale.
+            const currentProbeId = useDownloadStore.getState().probeRequestId;
+            if (!currentProbeId || id !== currentProbeId) {
+              addLog(
+                `Ignored stale probe result for ${id || "unknown id"}`,
+                "warn"
+              );
+              return;
             }
+            const info = payload.info as Record<string, unknown>;
+            if (!info) {
+              useDownloadStore.getState().clearProbeTimeout(id);
+              useDownloadStore.setState({
+                probeInFlight: false,
+                probeRequestId: null,
+                probeError: "Probe returned no metadata.",
+                statusMessage: "Probe failed.",
+              });
+              return;
+            }
+            useDownloadStore.getState().clearProbeTimeout(id);
+            setProbeInfo({
+              id,
+              title: String(info.title ?? "Unknown title"),
+              uploader: String(info.uploader ?? "Unknown uploader"),
+              duration:
+                info.duration != null && Number.isFinite(Number(info.duration))
+                  ? Number(info.duration)
+                  : undefined,
+              thumbnail: String(info.thumbnail ?? ""),
+              url: String(info.webpage_url ?? ""),
+              description: String(info.description ?? ""),
+              formats: parseFormats(info.formats),
+            });
+            addLog(`Probe success: ${String(info.title ?? "unknown")}`);
+            setStatusMessage("Probe complete.");
+            // F-11: the spinner is bound to the real probe lifecycle.
+            useDownloadStore.setState({
+              probeInFlight: false,
+              probeRequestId: null,
+            });
             return;
           }
           case "download_started": {
@@ -313,16 +334,27 @@ export function useEngineEvents() {
             if (isDownloadItem) {
               updateQueueItem(id, { status: "failed", message: errMsg });
               setStatusMessage("Download failed.");
-            } else if (id) {
+            } else if (
+              id &&
+              useDownloadStore.getState().probeRequestId === id
+            ) {
               // P2-24: WS-path probe failures previously only touched the
               // small grey status strip — the red "Probe failed" alert with
               // its Retry button existed solely on the REST path. Surface
               // them identically so both paths behave the same.
-              // F-11: also release the probe spinner.
-              useDownloadStore.getState().clearProbeTimeout();
-              useDownloadStore.setState({ probeError: errMsg, probeInFlight: false });
+              // F-11/N-09: release only the owning request's spinner; a stale
+              // error for a replaced/timed-out probe must not touch the UI.
+              useDownloadStore.getState().clearProbeTimeout(id);
+              useDownloadStore.setState({
+                probeError: errMsg,
+                probeInFlight: false,
+                probeRequestId: null,
+              });
               addToast(`Probe failed: ${errMsg}`, "error");
               setStatusMessage("Probe failed.");
+            } else if (id) {
+              // No queue item and no matching probe request — stale event.
+              addLog(`Ignored stale engine error for ${id}`, "warn");
             } else {
               // P2-24: background engine failures (no id) get a toast too —
               // the grey strip alone is far too easy to miss.

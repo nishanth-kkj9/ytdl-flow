@@ -15,12 +15,12 @@ Evidence: file inventory + line counts, `docs/codebase/.codebase-scan.txt` (chur
 
 ## Open gaps (roadmap Planned — all LOW/LOW-MED, assessed)
 
-- **N-09** probe watchdog (60 s) vs engine deadline race — self-heals (late result replaces timeout error). Keep planned until the timeout contract and boundary tests are consistent.
 - **N-11** server-persisted history lacks `thumbnail` (engine `result` carries only `thumbnail_ok`; needs protocol change). Do not add arbitrary thumbnail URLs.
 - Ideas (not committed): transient-DNS auto-retry, README CI badge, build-time raster favicon export, UX polish.
 
 ## Verified completed (previously listed as open)
 
+- **N-09** probe correlation/timeout contract: client-generated request id is registered before the REST call and echoed by `/api/probe`; `useEngineEvents` rejects stale `probe_result`/`error` events; the browser watchdog starts only after the ack (75 s). The engine applies a 60 s absolute deadline from command acceptance, including executor queue wait, and emits `ProbeTimeout` rather than a late success. WinUI keeps its 90 s request-correlated timeout. Covered by `downloadStore.test.ts`, `useEngineEvents.test.ts`, `routes.test.mjs`, `test_ipc.py`, and `test_engine.py`.
 - **N-04** `restoreActiveJobs()` re-runs on the first `engine_ready` after mount (`src/hooks/useEngineEvents.ts`), closing the mount-time `requestJobs` race.
 - **N-06** `verify_format` discovers ffprobe through `FFMPEG_PATH`; covered by `test_ffprobe_bin_falls_back_to_ffmpeg_path`.
 - **N-07** client result guards reject late results for `completed`/`failed`/`cancelled` rows (`src/hooks/useEngineEvents.ts`).
@@ -34,7 +34,7 @@ Strong for threat model: localhost bind, Host 421 + origin 403 + WS `verifyClien
 
 ## Performance
 
-Fine at single-user scale: bounded pools (5+5), capped backlog (100), probe timeouts tight (15 s socket / 60 s deadline), atomic JSON writes (100-record cap). No N+1 (no DB), no shared in-memory cache across instances (single process). No perf test harness — none needed at this scale.
+Fine at single-user scale: bounded pools (5+5), capped backlog (100), probe timeouts tight (15 s socket / 60 s engine deadline / 75 s UI watchdog), atomic JSON writes (100-record cap). No N+1 (no DB), no shared in-memory cache across instances (single process). No perf test harness — none needed at this scale.
 
 ## Fragile surfaces for next work
 

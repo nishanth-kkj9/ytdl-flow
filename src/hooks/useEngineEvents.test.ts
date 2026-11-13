@@ -67,6 +67,8 @@ describe("useEngineEvents — engine status flow", () => {
       history: [],
       probeInfo: null,
       probeError: null,
+      probeInFlight: false,
+      probeRequestId: null,
       engineStatus: "starting",
       cookieState: null,
       botBreaker: null,
@@ -75,6 +77,7 @@ describe("useEngineEvents — engine status flow", () => {
       metadataResult: null,
       _logSeq: 0,
     });
+    useDownloadStore.getState().clearProbeTimeout();
   });
 
   it("marks the engine ready from the on-connect snapshot", async () => {
@@ -247,6 +250,7 @@ describe("useEngineEvents — status message flow", () => {
 
   it("labels a probe failure as Probe failed (no queue item)", async () => {
     await setup();
+    useDownloadStore.setState({ probeRequestId: "probe-1", probeInFlight: true });
     emit("error", {
       type: "error",
       id: "probe-1",
@@ -255,6 +259,9 @@ describe("useEngineEvents — status message flow", () => {
     });
     // No queue item → not "Download failed."
     expect(useDownloadStore.getState().statusMessage).toBe("Probe failed.");
+    expect(useDownloadStore.getState().probeError).toBe("unavailable");
+    expect(useDownloadStore.getState().probeInFlight).toBe(false);
+    expect(useDownloadStore.getState().probeRequestId).toBeNull();
     expect(useDownloadStore.getState().queue.length).toBe(0);
   });
 
@@ -291,6 +298,7 @@ describe("useEngineEvents — status message flow", () => {
 
   it("updates the message when a probe result arrives", async () => {
     await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
     emit("probe_result", {
       type: "probe_result",
       id: "p1",
@@ -299,6 +307,56 @@ describe("useEngineEvents — status message flow", () => {
     });
     expect(useDownloadStore.getState().statusMessage).toBe("Probe complete.");
     expect(useDownloadStore.getState().probeInfo?.title).toBe("T");
+    expect(useDownloadStore.getState().probeInFlight).toBe(false);
+    expect(useDownloadStore.getState().probeRequestId).toBeNull();
+  });
+
+  it("accepts a probe result that arrives before the REST ack (N-09)", async () => {
+    await setup();
+    // probeUrl registers the id before sending, so the request is already
+    // known even though no ack has arrived yet.
+    useDownloadStore.setState({ probeRequestId: "early", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "early",
+      success: true,
+      info: { title: "Early", uploader: "U", duration: 1, thumbnail: "", webpage_url: "w", formats: [] },
+    });
+    expect(useDownloadStore.getState().probeInfo?.title).toBe("Early");
+    expect(useDownloadStore.getState().probeInFlight).toBe(false);
+  });
+
+  it("ignores a stale probe result for a replaced request (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "current", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "old",
+      success: true,
+      info: { title: "Old", uploader: "U", duration: 1, thumbnail: "", webpage_url: "w", formats: [] },
+    });
+    const s = useDownloadStore.getState();
+    expect(s.probeInfo).toBeNull();
+    expect(s.probeInFlight).toBe(true);
+    expect(s.probeRequestId).toBe("current");
+    expect(s.logs.some((l) => l.level === "warn" && l.message.includes("stale probe result"))).toBe(true);
+  });
+
+  it("ignores a stale probe error for a replaced request (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "current", probeInFlight: true });
+    emit("error", {
+      type: "error",
+      id: "old",
+      error_type: "ProbeError",
+      error: "late failure",
+    });
+    const s = useDownloadStore.getState();
+    expect(s.probeError).toBeNull();
+    expect(s.probeInFlight).toBe(true);
+    expect(s.probeRequestId).toBe("current");
+    expect(s.statusMessage).not.toBe("Probe failed.");
+    expect(s.logs.some((l) => l.level === "warn" && l.message.includes("stale engine error"))).toBe(true);
   });
 });
 

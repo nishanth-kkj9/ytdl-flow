@@ -104,10 +104,8 @@ Node only — never to Python or YouTube directly.
 
 - **CURRENT:** everything listed above as implemented.
 - **PLANNED:** small documented gaps tracked in `docs/codebase/CONCERNS.md`
-  (mount-time job-restore race, ffprobe discovery under `FFMPEG_PATH`-only
-  setups, automated CSP header test, server-persisted history thumbnails,
-  trim-start-without-trim-end validation, probe watchdog race, remaining low-
-  severity polish). See `docs/roadmap.md`.
+  (server-persisted history thumbnails, remaining low-severity polish). See
+  `docs/roadmap.md`.
 - **FUTURE:** ideas raised but not committed (engine probe DNS retry,
   README CI badge, further UX polish) — non-binding, listed in
   `docs/roadmap.md` under Ideas.
