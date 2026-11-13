@@ -388,6 +388,7 @@ function collect(bus, event) {
   const full = await promise;
   assert.deepStrictEqual(full.jobs, [{ id: "a", status: "running" }]);
   assert.deepStrictEqual(full.bot_breaker, { open: false, strikes: 0 });
+  assert.strictEqual(full.available, true, "a well-formed reply is available");
 
   // Legacy array shape for requestJobs().
   const mgr2 = new EngineManager(makeBus());
@@ -411,8 +412,36 @@ function collect(bus, event) {
   assert.deepStrictEqual(await mgr3.requestJobsFull(50), {
     jobs: [],
     bot_breaker: null,
+    available: false,
   });
   assert.deepStrictEqual(await mgr3.requestJobs(50), []);
+}
+
+// Test 17: malformed jobs replies and timeouts are not available snapshots.
+{
+  const mgr = new EngineManager(makeBus());
+  mgr.child = {};
+  mgr.stdin = { destroyed: false };
+  let sent = null;
+  mgr._writeCommand = (cmd) => {
+    sent = cmd;
+  };
+  const promise = mgr.requestJobsFull(500);
+  mgr.handleEngineMessage({
+    type: "jobs_result",
+    request_id: sent.request_id,
+    jobs: "not-an-array",
+  });
+  const full = await promise;
+  assert.deepStrictEqual(full.jobs, []);
+  assert.strictEqual(full.available, false);
+
+  const timedOut = new EngineManager(makeBus());
+  timedOut.child = {};
+  timedOut.stdin = { destroyed: false };
+  timedOut._writeCommand = () => {};
+  assert.strictEqual((await timedOut.requestJobsFull(20)).available, false);
+  console.log("✓ engineManager: malformed/timeout snapshots report available=false");
 }
 
 // Flush must survive a mid-flush write throw: failed command is requeued,

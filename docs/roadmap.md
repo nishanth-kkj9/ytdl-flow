@@ -41,6 +41,21 @@
   cancel/retry, conservative reconnect reconciliation, backend-persisted
   history, safe file actions, active-download close confirmation, and focused
   workflow/API/file-service tests.
+- Native cancellation recovery: `/api/status` now reports
+  `activeJobsSnapshotAvailable` so an unavailable jobs snapshot is never
+  mistaken for an empty one; a reliable snapshot resolves a missed cancellation
+  event to `Unknown` instead of leaving the row stuck in `Cancelling`, and a
+  still-active cancelling job returns to an actionable state after repeated
+  confirmations.
+- **N-04** completed: `restoreActiveJobs()` re-runs on the first `engine_ready`
+  after mount.
+- **N-06** completed: ffprobe discovery falls back to `FFMPEG_PATH` in
+  `verify_format`.
+- **N-07** completed: client result guards cover all terminal states, not just
+  `cancelled`.
+- **N-08** completed: `trim_start` without `trim_end` returns 400.
+- **N-10** completed: smoke tests assert the CSP header and its connect-src
+  sources in CI.
 
 ## In Progress
 
@@ -51,16 +66,11 @@
 All items below are documented, evidence-based gaps from
 `docs/codebase/CONCERNS.md` (Round 3/4 sections) — small, low-severity:
 
-- **N-04** — re-run `restoreActiveJobs()` on the first `engine_ready` after
-  mount (closes the mount-time `requestJobs` race).
-- **N-06** — ffprobe discovery via `FFMPEG_PATH` in `verify_format` for
-  `FFMPEG_PATH`-only setups.
-- **N-07** — extend the client result guard beyond `cancelled`.
-- **N-08** — reject `trim_start` without `trim_end` with a 400 instead of
-  silently ignoring it.
-- **N-09** — probe watchdog/deadline race polish.
-- **N-10** — automated CSP header test in CI.
-- **N-11** — include `thumbnail` in server-persisted history records.
+- **N-09** — probe watchdog/deadline race polish (needs a consistent timeout
+  contract plus boundary tests; a late result must not overwrite a visible
+  timeout).
+- **N-11** — include `thumbnail` in server-persisted history records (needs a
+  protocol change; do not add arbitrary thumbnail URLs).
 
 ## Ideas (not committed)
 

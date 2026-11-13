@@ -15,19 +15,36 @@ export function statusRouter(engineManager) {
     // missed while its WebSocket was down. Must never fail the endpoint when
     // the engine is down — requestJobs() resolves [] in that case; the catch
     // is defense-in-depth.
+    //
+    // activeJobsSnapshotAvailable tells consumers whether [] is authoritative.
+    // It is true only when the engine was ready and the jobs query returned a
+    // well-formed reply. Engine-down, timeout, shutdown, malformed replies, and
+    // legacy managers that cannot signal success all report false so callers
+    // never mistake "unknown" for "no active jobs".
+    const engineReady = engineManager.isReady();
     let activeJobs = [];
+    let activeJobsSnapshotAvailable = false;
     let botBreaker = null;
-    if (typeof engineManager.requestJobs === "function") {
+    if (engineReady && typeof engineManager.requestJobs === "function") {
       try {
         if (typeof engineManager.requestJobsFull === "function") {
           const full = await engineManager.requestJobsFull(500);
-          activeJobs = full.jobs;
-          botBreaker = full.bot_breaker;
+          if (full && Array.isArray(full.jobs)) {
+            activeJobs = full.jobs;
+            botBreaker = full.bot_breaker ?? null;
+            activeJobsSnapshotAvailable = full.available === true;
+          }
         } else {
-          activeJobs = await engineManager.requestJobs(500);
+          // Legacy array shape cannot distinguish a real empty reply from the
+          // engine-down default, so leave availability false.
+          const jobs = await engineManager.requestJobs(500);
+          if (Array.isArray(jobs)) {
+            activeJobs = jobs;
+          }
         }
       } catch {
         activeJobs = [];
+        activeJobsSnapshotAvailable = false;
         botBreaker = null;
       }
     }
@@ -38,7 +55,7 @@ export function statusRouter(engineManager) {
       // server restart). Lets the UI/dashboards detect a silently restarted
       // server even when everything else looks identical.
       uptimeSeconds: Math.floor(process.uptime()),
-      engineReady: engineManager.isReady(),
+      engineReady,
       downloadDir: config.downloadsDir,
       // Data dir holding history.json — lets test-smoke.mjs verify the
       // SERVER's isolation (not its own env) before a destructive DELETE.
@@ -61,6 +78,7 @@ export function statusRouter(engineManager) {
         ? engineManager.getPendingCount()
         : 0,
       activeJobs,
+      activeJobsSnapshotAvailable,
     });
   });
 

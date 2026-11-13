@@ -19,6 +19,12 @@ public sealed class BackendStatus
 
     [JsonPropertyName("activeJobs")]
     public List<BackendJob> ActiveJobs { get; set; } = [];
+
+    // False when the snapshot is unavailable (engine down, timeout, older
+    // backend that omits the field). Callers must not treat [] as authoritative
+    // unless this is true.
+    [JsonPropertyName("activeJobsSnapshotAvailable")]
+    public bool ActiveJobsSnapshotAvailable { get; set; }
 }
 
 public sealed class BackendJob

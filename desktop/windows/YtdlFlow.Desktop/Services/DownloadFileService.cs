@@ -77,8 +77,8 @@ public sealed class DownloadFileService
         {
             FileName = "explorer.exe",
             UseShellExecute = true,
+            Arguments = $"/select,\"{target}\"",
         };
-        startInfo.ArgumentList.Add($"/select,{target}");
         _startProcess(startInfo);
     }
 

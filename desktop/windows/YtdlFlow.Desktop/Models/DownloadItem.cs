@@ -17,8 +17,11 @@ public enum DownloadStatus
 
 public sealed partial class DownloadItem : ObservableObject
 {
+    private const int CancellationSnapshotChecksBeforeRevert = 3;
+
     private DownloadStatus _status;
     private DownloadStatus _statusBeforeCancellation;
+    private int _cancellationSnapshotChecks;
 
     public DownloadItem(
         string id,
@@ -152,6 +155,7 @@ public sealed partial class DownloadItem : ObservableObject
         }
 
         _statusBeforeCancellation = Status;
+        _cancellationSnapshotChecks = 0;
         Status = DownloadStatus.Cancelling;
         return true;
     }
@@ -299,6 +303,7 @@ public sealed partial class DownloadItem : ObservableObject
         }
 
         ErrorMessage = message;
+        _cancellationSnapshotChecks = 0;
         Status = SubmissionAcknowledged
             ? DownloadStatus.Downloading
             : _statusBeforeCancellation;
@@ -312,7 +317,35 @@ public sealed partial class DownloadItem : ObservableObject
         }
 
         ErrorMessage = message;
+        _cancellationSnapshotChecks = 0;
         Status = DownloadStatus.Unknown;
+    }
+
+    // A reliable backend snapshot still lists this cancelling job. The cancel
+    // command was acknowledged but no terminal event has arrived. Give the
+    // backend a few polls to drop the job, then restore an actionable state
+    // instead of leaving cancellation disabled forever.
+    public bool ObserveCancellationStillActive()
+    {
+        if (Status != DownloadStatus.Cancelling)
+        {
+            _cancellationSnapshotChecks = 0;
+            return false;
+        }
+
+        _cancellationSnapshotChecks++;
+        if (_cancellationSnapshotChecks < CancellationSnapshotChecksBeforeRevert)
+        {
+            return false;
+        }
+
+        _cancellationSnapshotChecks = 0;
+        ErrorMessage =
+            "The backend still reports this download as active; cancellation was not confirmed. Try cancelling again.";
+        Status = SubmissionAcknowledged
+            ? DownloadStatus.Downloading
+            : _statusBeforeCancellation;
+        return true;
     }
 
     public void ApplyBackendStatus(string? status)

@@ -282,8 +282,9 @@ export class EngineManager {
           this.pendingJobRequests.delete(msg.request_id);
           clearTimeout(pending.timer);
           const jobs = Array.isArray(msg.jobs) ? msg.jobs : [];
+          const available = Array.isArray(msg.jobs);
           if (pending.full) {
-            pending.resolve({ jobs, bot_breaker: msg.bot_breaker ?? null });
+            pending.resolve({ jobs, bot_breaker: msg.bot_breaker ?? null, available });
           } else {
             pending.resolve(jobs);
           }
@@ -426,6 +427,8 @@ export class EngineManager {
   // route to let a reconnecting browser reconcile queue items that may have
   // missed terminal events while its WebSocket was down. Resolves to [] when
   // the engine is unavailable (never rejects — callers must not have to guard).
+  // `available` distinguishes a confirmed snapshot from that safe empty default:
+  // false on engine-down, timeout, malformed reply, or shutdown.
   // NOTE: jobs_result now also carries bot_breaker — requestJobsFull() keeps
   // the raw payload for /api/status observability; requestJobs() stays
   // array-shaped for existing callers (status route, reconcile paths).
@@ -441,13 +444,13 @@ export class EngineManager {
         !this.stdin ||
         this.stdin.destroyed
       ) {
-        resolve({ jobs: [], bot_breaker: null });
+        resolve({ jobs: [], bot_breaker: null, available: false });
         return;
       }
       const requestId = `jobs-${++this._jobRequestSeq}`;
       const timer = setTimeout(() => {
         this.pendingJobRequests.delete(requestId);
-        resolve({ jobs: [], bot_breaker: null });
+        resolve({ jobs: [], bot_breaker: null, available: false });
       }, timeoutMs);
       this.pendingJobRequests.set(requestId, { resolve, timer, full: true });
       this._writeCommand({ cmd: "jobs", request_id: requestId });
@@ -461,7 +464,7 @@ export class EngineManager {
       // Test 10 pins the legacy array shape for requestJobs(); the full-shape
       // caller (requestJobsFull) gets the object shape. Resolve per-caller.
       if (pending.full) {
-        pending.resolve({ jobs: [], bot_breaker: null });
+        pending.resolve({ jobs: [], bot_breaker: null, available: false });
       } else {
         pending.resolve([]);
       }

@@ -74,7 +74,8 @@ public sealed class DownloadWorkflowTests
         Assert.False(item.CanCancel);
         Assert.True(queue.Reconcile(
             [new BackendJob { Id = item.Id, Status = "running" }],
-            engineReady: true));
+            engineReady: true,
+            snapshotAvailable: true));
         Assert.Equal(DownloadStatus.Downloading, item.Status);
     }
 
@@ -92,23 +93,113 @@ public sealed class DownloadWorkflowTests
             Mode = "video",
         };
 
-        Assert.False(queue.Reconcile([job], engineReady: false));
+        Assert.False(queue.Reconcile([job], engineReady: false, snapshotAvailable: true));
         Assert.Empty(queue);
-        Assert.True(queue.Reconcile([job], engineReady: true));
+        Assert.True(queue.Reconcile([job], engineReady: true, snapshotAvailable: true));
         var item = Assert.Single(queue);
         Assert.Equal(DownloadStatus.Downloading, item.Status);
         Assert.Equal("video", item.Mode);
 
-        Assert.True(queue.Reconcile([], engineReady: true));
+        Assert.True(queue.Reconcile([], engineReady: true, snapshotAvailable: true));
         Assert.Equal(DownloadStatus.Downloading, item.Status);
-        Assert.True(queue.Reconcile([], engineReady: true, markMissingUnknown: true));
+        Assert.True(queue.Reconcile([], engineReady: true, snapshotAvailable: true, markMissingUnknown: true));
         Assert.Equal(DownloadStatus.Unknown, item.Status);
 
-        Assert.True(queue.Reconcile([job], engineReady: true, markMissingUnknown: true));
+        Assert.True(queue.Reconcile([job], engineReady: true, snapshotAvailable: true, markMissingUnknown: true));
         Assert.Equal(DownloadStatus.Downloading, item.Status);
         Assert.True(item.ApplyFailure("failed"));
-        Assert.True(queue.Reconcile([job], engineReady: true, markMissingUnknown: true));
+        Assert.True(queue.Reconcile([job], engineReady: true, snapshotAvailable: true, markMissingUnknown: true));
         Assert.Equal(DownloadStatus.Failed, item.Status);
+    }
+
+    [Fact]
+    public void ReliableMissingCancellingJobBecomesUnknownWithoutClaimingCancellation()
+    {
+        var queue = new DownloadQueue();
+        var item = NewItem();
+        Assert.True(queue.TryAdd(item));
+        item.AcknowledgeSubmission();
+        Assert.True(item.BeginCancellation());
+
+        Assert.True(queue.Reconcile([], engineReady: true, snapshotAvailable: true));
+
+        Assert.Equal(DownloadStatus.Unknown, item.Status);
+        Assert.NotEqual(DownloadStatus.Cancelled, item.Status);
+        Assert.Contains("outcome is unknown", item.ErrorMessage);
+
+        Assert.True(queue.Reconcile([], engineReady: true, snapshotAvailable: true, markMissingUnknown: true));
+        Assert.Equal(DownloadStatus.Unknown, item.Status);
+    }
+
+    [Fact]
+    public void UnavailableSnapshotLeavesCancellingStateUntouched()
+    {
+        var queue = new DownloadQueue();
+        var item = NewItem();
+        Assert.True(queue.TryAdd(item));
+        item.AcknowledgeSubmission();
+        Assert.True(item.BeginCancellation());
+
+        Assert.False(queue.Reconcile([], engineReady: true, snapshotAvailable: false));
+        Assert.Equal(DownloadStatus.Cancelling, item.Status);
+
+        Assert.False(queue.Reconcile([], engineReady: false, snapshotAvailable: true));
+        Assert.Equal(DownloadStatus.Cancelling, item.Status);
+
+        Assert.False(queue.Reconcile(
+            [],
+            engineReady: true,
+            snapshotAvailable: false,
+            markMissingUnknown: true));
+        Assert.Equal(DownloadStatus.Cancelling, item.Status);
+    }
+
+    [Fact]
+    public void SnapshotStillListingCancellingJobDoesNotReportSuccessfulCancellation()
+    {
+        var queue = new DownloadQueue();
+        var item = NewItem();
+        Assert.True(queue.TryAdd(item));
+        item.AcknowledgeSubmission();
+        Assert.True(item.BeginCancellation());
+        var job = new BackendJob { Id = item.Id, Status = "running" };
+
+        Assert.True(queue.Reconcile([job], engineReady: true, snapshotAvailable: true));
+        Assert.Equal(DownloadStatus.Cancelling, item.Status);
+        Assert.True(queue.Reconcile([job], engineReady: true, snapshotAvailable: true));
+        Assert.Equal(DownloadStatus.Cancelling, item.Status);
+        Assert.True(queue.Reconcile([job], engineReady: true, snapshotAvailable: true));
+
+        Assert.Equal(DownloadStatus.Downloading, item.Status);
+        Assert.NotEqual(DownloadStatus.Cancelled, item.Status);
+        Assert.True(item.CanCancel);
+        Assert.Contains("still reports", item.ErrorMessage);
+    }
+
+    [Fact]
+    public void UnknownCancellationOutcomeResolvesByLateAuthoritativeEvents()
+    {
+        var queue = new DownloadQueue();
+        var cancelled = NewItem("cancelled");
+        var completed = NewItem("completed");
+        var failed = NewItem("failed");
+        foreach (var item in new[] { cancelled, completed, failed })
+        {
+            Assert.True(queue.TryAdd(item));
+            item.AcknowledgeSubmission();
+            Assert.True(item.BeginCancellation());
+        }
+
+        Assert.True(queue.Reconcile([], engineReady: true, snapshotAvailable: true));
+        Assert.All(new[] { cancelled, completed, failed }, item =>
+            Assert.Equal(DownloadStatus.Unknown, item.Status));
+
+        Assert.True(cancelled.ApplyCancelled());
+        Assert.Equal(DownloadStatus.Cancelled, cancelled.Status);
+        Assert.True(completed.ApplyResult("Finished", @"C:\downloads\finished.mp4"));
+        Assert.Equal(DownloadStatus.Completed, completed.Status);
+        Assert.True(failed.ApplyFailure("worker failed"));
+        Assert.Equal(DownloadStatus.Failed, failed.Status);
     }
 
     [Fact]
@@ -337,7 +428,7 @@ public sealed class DownloadWorkflowTests
 
         Assert.Equal("explorer.exe", launched?.FileName);
         Assert.True(launched!.UseShellExecute);
-        Assert.Equal($"/select,{Path.GetFullPath(path)}", Assert.Single(launched!.ArgumentList));
+        Assert.Equal($"/select,\"{Path.GetFullPath(path)}\"", launched!.Arguments);
     }
 
     [Fact]

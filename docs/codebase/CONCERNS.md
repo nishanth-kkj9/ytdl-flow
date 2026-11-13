@@ -15,12 +15,18 @@ Evidence: file inventory + line counts, `docs/codebase/.codebase-scan.txt` (chur
 
 ## Open gaps (roadmap Planned — all LOW/LOW-MED, assessed)
 
-- **N-04** mount-time `requestJobs` 500 ms race → re-run `restoreActiveJobs()` on first `engine_ready` after mount. (Downloads die with engine, so only the timeout race remains.)
-- **N-06** `verify_format` misses ffprobe in `FFMPEG_PATH`-only setups (F-17 PATH-prepend removal side effect).
-- **N-07** client result guard covers only `cancelled`; late `completed↔failed` flip has no known engine path.
-- **N-09** probe watchdog (60 s) vs engine deadline race — self-heals (late result replaces timeout error).
-- **N-11** server-persisted history lacks `thumbnail` (engine `result` carries only `thumbnail_ok`; needs protocol change).
+- **N-09** probe watchdog (60 s) vs engine deadline race — self-heals (late result replaces timeout error). Keep planned until the timeout contract and boundary tests are consistent.
+- **N-11** server-persisted history lacks `thumbnail` (engine `result` carries only `thumbnail_ok`; needs protocol change). Do not add arbitrary thumbnail URLs.
 - Ideas (not committed): transient-DNS auto-retry, README CI badge, build-time raster favicon export, UX polish.
+
+## Verified completed (previously listed as open)
+
+- **N-04** `restoreActiveJobs()` re-runs on the first `engine_ready` after mount (`src/hooks/useEngineEvents.ts`), closing the mount-time `requestJobs` race.
+- **N-06** `verify_format` discovers ffprobe through `FFMPEG_PATH`; covered by `test_ffprobe_bin_falls_back_to_ffmpeg_path`.
+- **N-07** client result guards reject late results for `completed`/`failed`/`cancelled` rows (`src/hooks/useEngineEvents.ts`).
+- **N-08** `trim_start` without `trim_end` returns 400 (`web/tests/routes.test.mjs`).
+- **N-10** smoke tests assert the CSP header and connect-src sources in CI (`test-smoke.mjs`).
+- Native cancellation recovery: `activeJobsSnapshotAvailable` distinguishes a failed snapshot from a confirmed empty one; reliable snapshots resolve missed cancellation events to `Unknown`, and still-active cancelling jobs return to an actionable state.
 
 ## Security posture
 

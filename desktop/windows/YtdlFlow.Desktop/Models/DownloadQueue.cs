@@ -37,9 +37,10 @@ public sealed class DownloadQueue : ObservableCollection<DownloadItem>
     public bool Reconcile(
         IEnumerable<BackendJob> activeJobs,
         bool engineReady,
+        bool snapshotAvailable,
         bool markMissingUnknown = false)
     {
-        if (!engineReady)
+        if (!engineReady || !snapshotAvailable)
         {
             return false;
         }
@@ -69,11 +70,17 @@ public sealed class DownloadQueue : ObservableCollection<DownloadItem>
             }
 
             item.ApplyBackendStatus(job.Status);
+            item.ObserveCancellationStillActive();
         }
 
-        if (markMissingUnknown)
+        foreach (var item in this.Where(item => item.IsActive && !activeIds.Contains(item.Id)))
         {
-            foreach (var item in this.Where(item => item.IsActive && !activeIds.Contains(item.Id)))
+            if (item.Status == DownloadStatus.Cancelling)
+            {
+                item.CancellationResolutionUnknown(
+                    "The backend no longer reports this download as active, but no cancellation event was received. Its outcome is unknown.");
+            }
+            else if (markMissingUnknown)
             {
                 item.MarkUnknown();
             }

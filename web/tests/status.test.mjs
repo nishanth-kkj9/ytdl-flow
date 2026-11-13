@@ -54,6 +54,11 @@ function request(app, path) {
   assert.deepStrictEqual(res.body.tools, { ffmpeg: true, ffprobe: true, deno: false });
   assert.strictEqual(res.body.pendingCommands, 3, "pending queue depth should be exposed");
   assert.deepStrictEqual(res.body.activeJobs, [{ id: "job-1", status: "running" }]);
+  assert.strictEqual(
+    res.body.activeJobsSnapshotAvailable,
+    false,
+    "legacy array-only managers cannot confirm a snapshot"
+  );
   assert.strictEqual(typeof res.body.downloadDir, "string");
   console.log("✓ status: version, uptime, engine, tools, pending, jobs all present");
 }
@@ -77,6 +82,7 @@ function request(app, path) {
   assert.strictEqual(res.body.pendingCommands, 0, "pendingCommands should default to 0");
   assert.deepStrictEqual(res.body.tools, null, "tools should default to null");
   assert.deepStrictEqual(res.body.activeJobs, [], "activeJobs should default to []");
+  assert.strictEqual(res.body.activeJobsSnapshotAvailable, false);
   console.log("✓ status: missing engine accessors degrade safely");
 }
 
@@ -96,6 +102,11 @@ function request(app, path) {
   const res = await request(app, "/api/status");
   assert.strictEqual(res.status, 200, "A failing job snapshot must not 500 the endpoint");
   assert.deepStrictEqual(res.body.activeJobs, []);
+  assert.strictEqual(
+    res.body.activeJobsSnapshotAvailable,
+    false,
+    "a failed snapshot must not look like a confirmed empty queue"
+  );
   console.log("✓ status: active-jobs snapshot failure degrades to [] (no 500)");
 }
 
@@ -111,6 +122,7 @@ function request(app, path) {
         requestJobsFull: async () => ({
           jobs: [],
           bot_breaker: { open: true, consecutive_failures: 3, cooldown_seconds: 240 },
+          available: true,
         }),
         // requestJobs must NOT be called when the full variant exists.
         requestJobs: async () => {
@@ -127,6 +139,11 @@ function request(app, path) {
     consecutive_failures: 3,
     cooldown_seconds: 240,
   });
+  assert.strictEqual(
+    res.body.activeJobsSnapshotAvailable,
+    true,
+    "a well-formed empty jobs reply is a confirmed snapshot"
+  );
   console.log("✓ status: cookies + bot_breaker exposed via requestJobsFull");
 }
 
@@ -145,7 +162,54 @@ function request(app, path) {
   assert.strictEqual(res.status, 200);
   assert.strictEqual(res.body.cookies, null, "cookies should default to null");
   assert.strictEqual(res.body.bot_breaker, null, "bot_breaker should default to null");
+  assert.strictEqual(res.body.activeJobsSnapshotAvailable, false);
   console.log("✓ status: legacy engine degrades to cookies=null, bot_breaker=null");
+}
+
+// Test 6: malformed or unavailable job replies are never treated as a
+// confirmed empty snapshot, and engine-down short-circuits the query.
+{
+  for (const full of [
+    { jobs: "not-an-array", available: true },
+    { jobs: [], available: false },
+    { jobs: [], available: true },
+  ]) {
+    const app = express();
+    app.use(
+      "/api/status",
+      statusRouter(
+        makeEngine({
+          requestJobsFull: async () => full,
+        })
+      )
+    );
+    const res = await request(app, "/api/status");
+    assert.strictEqual(res.status, 200);
+    const expected =
+      full.available === true && Array.isArray(full.jobs) && full.jobs.length === 0;
+    assert.strictEqual(
+      res.body.activeJobsSnapshotAvailable,
+      expected,
+      `snapshot availability must match the engine reply (${JSON.stringify(full)})`
+    );
+  }
+
+  const app = express();
+  app.use(
+    "/api/status",
+    statusRouter(
+      makeEngine({
+        isReady: () => false,
+        requestJobsFull: async () => {
+          throw new Error("must not query a down engine");
+        },
+      })
+    )
+  );
+  const res = await request(app, "/api/status");
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.activeJobsSnapshotAvailable, false);
+  console.log("✓ status: malformed/unavailable snapshots are not authoritative");
 }
 
 console.log("All status tests passed.");

@@ -1036,7 +1036,11 @@ public partial class MainViewModel : ObservableObject
             EngineStatus = health.EngineReady ? "Engine ready" : "Python engine starting";
 
             var status = await _backendService.GetStatusAsync(cancellationToken);
-            _downloadQueue.Reconcile(status.ActiveJobs, status.EngineReady, markMissingUnknown);
+            _downloadQueue.Reconcile(
+                status.ActiveJobs,
+                status.EngineReady,
+                status.ActiveJobsSnapshotAvailable,
+                markMissingUnknown);
             if (!string.IsNullOrWhiteSpace(status.DownloadDirectory))
             {
                 DownloadDirectory = status.DownloadDirectory;
