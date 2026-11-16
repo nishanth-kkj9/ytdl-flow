@@ -7,10 +7,26 @@ directory.
 import os
 import sys
 
+import pytest
+
 # Make `import ipc_main` resolve the sibling engine module directory.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ipc_main import _resolve_output_dir, _YDL_PROJECT_ROOT  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_bot_breaker(monkeypatch):
+    """Keep probe tests order-independent.
+
+    A breaker latched by an earlier test carries a REAL monotonic timestamp,
+    which outranks the fake clocks used here and would short-circuit `_probe`
+    to BotDetectionError before the code under test runs.
+    """
+    import ipc_main
+
+    monkeypatch.setattr(ipc_main, "_BOT_BREAKER_FAILURES", 0)
+    monkeypatch.setattr(ipc_main, "_BOT_BREAKER_OPEN_UNTIL", 0.0)
 
 
 _BASE = os.path.realpath(os.path.join(_YDL_PROJECT_ROOT, "..", "downloads"))
@@ -296,3 +312,78 @@ def test_probe_forwards_deadline_to_engine_and_keeps_id(monkeypatch):
     assert msg["type"] == "probe_result"
     assert msg["id"] == "probe-ok"
     assert msg["success"] is True
+
+
+def test_probe_falsey_result_past_deadline_is_timeout(monkeypatch):
+    """A late falsey result is classified as a timeout by the IPC layer."""
+    import ipc_main
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(ipc_main.time, "monotonic", lambda: clock["now"])
+
+    class LateFalseyEngine:
+        def probe(self, _url, deadline=None):
+            clock["now"] = (deadline or clock["now"]) + 1
+            return None, "raw extractor failure"
+
+    msg = _capture_probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "probe-late-falsey",
+        deadline=1060.0,
+        engine_cls=LateFalseyEngine,
+        monkeypatch=monkeypatch,
+    )
+    assert msg["type"] == "error"
+    assert msg["id"] == "probe-late-falsey"
+    assert msg["error_type"] == "ProbeTimeout"
+
+
+def test_probe_exception_past_deadline_is_timeout(monkeypatch):
+    """An exception raised after the budget is spent is a timeout."""
+    import ipc_main
+
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(ipc_main.time, "monotonic", lambda: clock["now"])
+
+    class LateExplodingEngine:
+        def probe(self, _url, deadline=None):
+            clock["now"] = (deadline or clock["now"]) + 1
+            raise RuntimeError("worker exploded")
+
+    msg = _capture_probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "probe-late-exception",
+        deadline=1060.0,
+        engine_cls=LateExplodingEngine,
+        monkeypatch=monkeypatch,
+    )
+    assert msg["type"] == "error"
+    assert msg["id"] == "probe-late-exception"
+    assert msg["error_type"] == "ProbeTimeout"
+
+
+def test_probe_bot_detection_past_deadline_is_timeout_and_latches_breaker(monkeypatch):
+    """A late bot-check reports timeout but still trips the breaker."""
+    import ipc_main
+
+    clock = {"now": 1000.0}
+    latched: list[str] = []
+    monkeypatch.setattr(ipc_main.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(ipc_main, "_bot_breaker_failure", lambda error: latched.append(error))
+
+    class LateBotEngine:
+        def probe(self, _url, deadline=None):
+            clock["now"] = (deadline or clock["now"]) + 1
+            return None, "Sign in to confirm you're not a bot"
+
+    msg = _capture_probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "probe-late-bot",
+        deadline=1060.0,
+        engine_cls=LateBotEngine,
+        monkeypatch=monkeypatch,
+    )
+    assert msg["type"] == "error"
+    assert msg["id"] == "probe-late-bot"
+    assert msg["error_type"] == "ProbeTimeout"
+    assert len(latched) == 1

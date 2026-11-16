@@ -636,3 +636,237 @@ def test_probe_caps_retry_sleep_to_remaining_budget(monkeypatch):
     assert "timed out" in error.lower()
     assert len(sleeps) == 1, "must not retry after the budget is spent"
     assert abs(sleeps[0] - 0.05) < 1e-6, f"slept past the deadline: {sleeps[0]}"
+
+
+def _patch_clock(monkeypatch, eng_mod, clock):
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    monkeypatch.setattr(eng_mod.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(eng_mod.time, "sleep", lambda _seconds: None)
+
+
+def test_probe_falsey_result_past_deadline_is_timeout(monkeypatch):
+    """A falsey extraction that lands late must still be a timeout."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    calls = {"n": 0}
+
+    class FalseyYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise RuntimeError("temporary network blip")
+            clock["now"] = 1001.0
+            return None
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", FalseyYDL)
+    _patch_clock(monkeypatch, eng_mod, clock)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=1000.5,
+    )
+
+    assert info is None
+    assert "timed out" in error.lower()
+    assert calls["n"] == 3, "the late falsey attempt must not be retried"
+
+
+def test_probe_bot_detection_past_deadline_preserves_classification(monkeypatch):
+    """The engine keeps the bot error so IPC can latch the breaker first."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    calls = {"n": 0}
+
+    class BotYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            calls["n"] += 1
+            clock["now"] = 1001.0
+            raise RuntimeError("Sign in to confirm you're not a bot")
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", BotYDL)
+    _patch_clock(monkeypatch, eng_mod, clock)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=1000.5,
+    )
+
+    assert info is None
+    assert "not a bot" in error.lower()
+    assert calls["n"] == 1
+
+
+def test_probe_falsey_result_before_deadline_returns_useful_error(monkeypatch):
+    """Exhausting retries with falsey results must not return an empty error."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    calls = {"n": 0}
+
+    class FalseyYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            calls["n"] += 1
+            return None
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", FalseyYDL)
+    _patch_clock(monkeypatch, eng_mod, clock)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=1060.0,
+    )
+
+    assert info is None
+    assert error.strip(), "a falsey probe must return an actionable error"
+    assert calls["n"] == 3
+
+
+def test_probe_message_less_exception_returns_useful_error(monkeypatch):
+    """An exception with no message must still surface a usable error string."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    calls = {"n": 0}
+
+    class SilentFailureYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            calls["n"] += 1
+            raise RuntimeError()
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", SilentFailureYDL)
+    _patch_clock(monkeypatch, eng_mod, clock)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=1060.0,
+    )
+
+    assert info is None
+    assert error.strip(), "a message-less exception must not return an empty error"
+    assert "RuntimeError" in error
+    assert calls["n"] == 3
+
+
+def test_probe_falsey_result_backs_off_between_attempts(monkeypatch):
+    """Falsey results must pace retries like exceptions, not burst."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    calls = {"n": 0}
+    sleeps: list[float] = []
+
+    def fake_monotonic() -> float:
+        return clock["now"]
+
+    def recording_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock["now"] += seconds
+
+    class FalseyYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            calls["n"] += 1
+            return None
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", FalseyYDL)
+    monkeypatch.setattr(eng_mod.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(eng_mod.time, "sleep", recording_sleep)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=1060.0,
+    )
+
+    assert info is None
+    assert error.strip()
+    assert calls["n"] == 3
+    assert sleeps == [1.5, 3.0], f"falsey retries must be paced: {sleeps}"
+
+
+def test_probe_success_past_deadline_is_timeout(monkeypatch):
+    """A truthy extraction that lands late must be reported as a timeout."""
+    import engine as eng_mod
+
+    clock = {"now": 1000.0}
+    calls = {"n": 0}
+
+    class LateSuccessYDL:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def extract_info(self, *_a, **_kw):
+            calls["n"] += 1
+            clock["now"] = 1001.0
+            return {"title": "Late", "webpage_url": "https://youtu.be/x"}
+
+    monkeypatch.setattr(eng_mod, "YoutubeDL", LateSuccessYDL)
+    _patch_clock(monkeypatch, eng_mod, clock)
+    engine = AudioDownloadEngine()
+
+    info, error = engine.probe(
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        deadline=1000.5,
+    )
+
+    assert info is None
+    assert "timed out" in error.lower()
+    assert calls["n"] == 1

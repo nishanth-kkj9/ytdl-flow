@@ -291,13 +291,9 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       probeInFlight: true,
       probeRequestId: requestId,
     });
-    let confirmedId = requestId;
+    let ack: unknown;
     try {
-      const ack = await invoke<{ id?: string }>("probe_url", { url, id: requestId });
-      // Prefer the server's echo (it may have generated an id if the client
-      // one was omitted by an older transport).
-      if (typeof ack?.id === "string" && ack.id) confirmedId = ack.id;
-      get().addLog(`Probe requested: ${url}`);
+      ack = await invoke<{ id?: string }>("probe_url", { url, id: requestId });
     } catch (error) {
       // An early WS result may have already finished this request, or a newer
       // probe may have replaced it. A stale REST failure must not overwrite
@@ -317,23 +313,47 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
       return;
     }
     // A result may already have resolved (and cleared) this request while the
-    // REST call was in flight — never arm a watchdog for a finished probe.
-    if (activeProbeRequestId !== requestId) return;
-    if (confirmedId !== requestId) {
-      activeProbeRequestId = confirmedId;
-      set({ probeRequestId: confirmedId });
+    // REST call was in flight, or a newer probe may have replaced it — a stale
+    // ack must never arm a watchdog or rewrite current state. Only a replaced
+    // request is worth warning about; an already-completed one is expected.
+    if (activeProbeRequestId !== requestId) {
+      if (useDownloadStore.getState().probeRequestId !== null) {
+        get().addLog(`Ignored stale probe_url ack for ${requestId}`, "warn");
+      }
+      return;
     }
+    // N-09: the ack must echo the submitted id exactly. Missing, empty,
+    // malformed, or different ids are protocol errors — adopting a server id
+    // would let a mismatched result update the wrong request.
+    const ackId =
+      ack && typeof ack === "object"
+        ? (ack as { id?: unknown }).id
+        : undefined;
+    if (typeof ackId !== "string" || ackId !== requestId) {
+      const acknowledged = ackId === undefined ? "no id" : JSON.stringify(ackId);
+      const message = `Probe protocol error: server acknowledged ${acknowledged} instead of ${requestId}.`;
+      clearProbeTimeout(requestId);
+      set({
+        statusMessage: "Probe failed.",
+        probeError: message,
+        probeInFlight: false,
+        probeRequestId: null,
+      });
+      get().addLog(message, "error");
+      return;
+    }
+    get().addLog(`Probe requested: ${url}`);
     // F-11/N-09: the REST ack returns immediately; the RESULT arrives over WS.
     // The watchdog is owned by this request id and fires 75 s after the ack,
     // leaving margin over the engine's 60 s budget. A lost event therefore
     // can't leave the spinner up forever, and a late result for this id can
     // never overwrite the visible timeout (it is rejected as stale).
     activeProbeTimeout = setTimeout(() => {
-      if (activeProbeRequestId !== confirmedId) return;
+      if (activeProbeRequestId !== requestId) return;
       activeProbeTimeout = undefined;
       activeProbeRequestId = null;
       const state = useDownloadStore.getState();
-      if (state.probeInFlight && state.probeRequestId === confirmedId) {
+      if (state.probeInFlight && state.probeRequestId === requestId) {
         useDownloadStore.setState({
           probeInFlight: false,
           probeRequestId: null,

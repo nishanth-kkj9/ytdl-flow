@@ -22,25 +22,52 @@ export function useEngineEvents() {
   // later pass could mark items the earlier pass had just decided about.
   const reconcileInFlight = useRef(false);
 
+  // N-09: a probe result must carry a real metadata object. Empty, null,
+  // array, or string payloads are protocol errors, not "unknown title" probes.
+  function isUsableProbeInfo(info: unknown): info is Record<string, unknown> {
+    if (!info || typeof info !== "object" || Array.isArray(info)) return false;
+    const record = info as Record<string, unknown>;
+    const hasTitle = typeof record.title === "string" && record.title.trim() !== "";
+    const hasUrl = typeof record.webpage_url === "string" && record.webpage_url.trim() !== "";
+    // Formats only count as usable when they are real entries with an
+    // identifier; an empty list is allowed alongside a title/url but cannot
+    // carry a probe by itself.
+    const hasFormats =
+      Array.isArray(record.formats) &&
+      record.formats.some(
+        (f) =>
+          !!f &&
+          typeof f === "object" &&
+          !Array.isArray(f) &&
+          (String((f as Record<string, unknown>).format_id ?? "").trim() !== "" ||
+            String((f as Record<string, unknown>).ext ?? "").trim() !== "")
+      );
+    return hasTitle || hasUrl || hasFormats;
+  }
+
   function parseFormats(raw: unknown): FormatInfo[] {
     if (!Array.isArray(raw)) return [];
-    return raw.map((f: unknown) => {
-      const fmt = f as Record<string, unknown>;
-      return {
-        format_id: String(fmt.format_id ?? ""),
-        ext: String(fmt.ext ?? ""),
-        resolution: fmt.resolution != null ? String(fmt.resolution) : undefined,
-        filesize: fmt.filesize != null ? Number(fmt.filesize) : undefined,
-        fps: fmt.fps != null ? Number(fmt.fps) : undefined,
-        vcodec: fmt.vcodec && String(fmt.vcodec) !== "none" ? String(fmt.vcodec) : undefined,
-        acodec: fmt.acodec && String(fmt.acodec) !== "none" ? String(fmt.acodec) : undefined,
-        abr: fmt.abr != null ? Number(fmt.abr) : undefined,
-        vbr: fmt.vbr != null ? Number(fmt.vbr) : undefined,
-        tbr: fmt.tbr != null ? Number(fmt.tbr) : undefined,
-        channels: fmt.channels != null ? Number(fmt.channels) : undefined,
-        audio_sample_rate: fmt.audio_sample_rate != null ? Number(fmt.audio_sample_rate) : undefined,
-      };
-    });
+    return raw
+      // A single malformed entry must not abort parsing after the watchdog was
+      // already disarmed — drop it instead of dereferencing null.
+      .filter((f: unknown) => !!f && typeof f === "object")
+      .map((f: unknown) => {
+        const fmt = f as Record<string, unknown>;
+        return {
+          format_id: String(fmt.format_id ?? ""),
+          ext: String(fmt.ext ?? ""),
+          resolution: fmt.resolution != null ? String(fmt.resolution) : undefined,
+          filesize: fmt.filesize != null ? Number(fmt.filesize) : undefined,
+          fps: fmt.fps != null ? Number(fmt.fps) : undefined,
+          vcodec: fmt.vcodec && String(fmt.vcodec) !== "none" ? String(fmt.vcodec) : undefined,
+          acodec: fmt.acodec && String(fmt.acodec) !== "none" ? String(fmt.acodec) : undefined,
+          abr: fmt.abr != null ? Number(fmt.abr) : undefined,
+          vbr: fmt.vbr != null ? Number(fmt.vbr) : undefined,
+          tbr: fmt.tbr != null ? Number(fmt.tbr) : undefined,
+          channels: fmt.channels != null ? Number(fmt.channels) : undefined,
+          audio_sample_rate: fmt.audio_sample_rate != null ? Number(fmt.audio_sample_rate) : undefined,
+        };
+      });
   }
 
   useEffect(() => {
@@ -144,13 +171,13 @@ export function useEngineEvents() {
               );
               return;
             }
-            const info = payload.info as Record<string, unknown>;
-            if (!info) {
+            const info = payload.info;
+            if (!isUsableProbeInfo(info)) {
               useDownloadStore.getState().clearProbeTimeout(id);
               useDownloadStore.setState({
                 probeInFlight: false,
                 probeRequestId: null,
-                probeError: "Probe returned no metadata.",
+                probeError: "Probe returned invalid metadata.",
                 statusMessage: "Probe failed.",
               });
               return;

@@ -45,6 +45,7 @@ vi.mock("../api/transport", () => ({
 
 import { useDownloadStore } from "../stores/downloadStore";
 import { useEngineEvents } from "./useEngineEvents";
+import { invoke } from "../api/transport";
 
 // Simulate a WS message exactly as the server broadcasts it: the transport
 // hands the full { type, payload } envelope to the wildcard handler.
@@ -141,6 +142,8 @@ describe("useEngineEvents — status message flow", () => {
       history: [],
       probeInfo: null,
       probeError: null,
+      probeInFlight: false,
+      probeRequestId: null,
       engineStatus: "starting",
       statusMessage: "Starting download...",
       logs: [],
@@ -357,6 +360,126 @@ describe("useEngineEvents — status message flow", () => {
     expect(s.probeRequestId).toBe("current");
     expect(s.statusMessage).not.toBe("Probe failed.");
     expect(s.logs.some((l) => l.level === "warn" && l.message.includes("stale engine error"))).toBe(true);
+  });
+
+  it.each([
+    ["null", null],
+    ["missing", undefined],
+    ["empty object", {}],
+    ["array", []],
+    ["string", "not metadata"],
+    ["blank title", { title: "" }],
+    ["blank title with empty formats", { title: "", formats: [] }],
+    ["malformed format entry", { formats: [null] }],
+    ["formats without identifiers", { formats: [{}] }],
+    ["empty object with empty formats", { formats: [] }],
+  ])("rejects malformed probe metadata: %s (N-09)", async (_label, info) => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
+    emit("probe_result", { type: "probe_result", id: "p1", success: true, info });
+
+    const s = useDownloadStore.getState();
+    expect(s.probeInfo).toBeNull();
+    expect(s.probeInFlight).toBe(false);
+    expect(s.probeRequestId).toBeNull();
+    expect(s.probeError).toBe("Probe returned invalid metadata.");
+    expect(s.statusMessage).toBe("Probe failed.");
+  });
+
+  it("accepts minimal usable probe metadata (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "p1",
+      success: true,
+      info: { title: "T" },
+    });
+
+    const s = useDownloadStore.getState();
+    expect(s.probeInfo?.title).toBe("T");
+    expect(s.probeError).toBeNull();
+    expect(s.probeInFlight).toBe(false);
+  });
+
+  it("accepts metadata with an empty formats list (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "p1",
+      success: true,
+      info: { title: "T", formats: [] },
+    });
+
+    expect(useDownloadStore.getState().probeInfo?.formats).toEqual([]);
+    expect(useDownloadStore.getState().probeError).toBeNull();
+  });
+
+  it("ignores malformed metadata for a stale request (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "current", probeInFlight: true });
+    emit("probe_result", { type: "probe_result", id: "old", success: true, info: null });
+
+    const s = useDownloadStore.getState();
+    expect(s.probeInFlight).toBe(true);
+    expect(s.probeRequestId).toBe("current");
+    expect(s.probeError).toBeNull();
+  });
+
+  it("accepts metadata carried only by a formats list (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "p1",
+      success: true,
+      info: { formats: [{ format_id: "251", ext: "webm" }] },
+    });
+
+    const s = useDownloadStore.getState();
+    expect(s.probeInfo?.formats?.[0]).toMatchObject({ format_id: "251", ext: "webm" });
+    expect(s.probeError).toBeNull();
+    expect(s.probeInFlight).toBe(false);
+  });
+
+  it("drops malformed format entries instead of aborting the result (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "p1",
+      success: true,
+      info: { formats: [{ format_id: "251", ext: "webm" }, null] },
+    });
+
+    const s = useDownloadStore.getState();
+    expect(s.probeInfo?.formats).toHaveLength(1);
+    expect(s.probeInfo?.formats?.[0]?.format_id).toBe("251");
+    expect(s.probeError).toBeNull();
+    expect(s.probeInFlight).toBe(false);
+  });
+
+  it("disarms the request-owned watchdog on a matching result (N-09)", async () => {
+    await setup();
+    vi.useFakeTimers();
+    try {
+      vi.mocked(invoke).mockImplementationOnce(async (_command: string, args?: Record<string, unknown>) => ({
+        id: (args as { id?: string } | undefined)?.id,
+      }));
+      await useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
+      const id = useDownloadStore.getState().probeRequestId!;
+      expect(vi.getTimerCount()).toBe(1);
+
+      emit("probe_result", { type: "probe_result", id, success: true, info: { title: "T" } });
+      expect(vi.getTimerCount()).toBe(0);
+
+      vi.advanceTimersByTime(75_000);
+      expect(useDownloadStore.getState().probeError).toBeNull();
+      expect(useDownloadStore.getState().probeInFlight).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

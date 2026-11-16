@@ -57,11 +57,13 @@
 - **N-10** completed: smoke tests assert the CSP header and its connect-src
   sources in CI.
 - **N-09** completed: probe requests carry a client id end-to-end; the browser
-  registers it before the REST call, ignores stale `probe_result`/`error`
-  events, and owns a 75 s post-ack watchdog. The engine enforces a 60 s
-  absolute deadline from command acceptance (including executor queue wait) and
-  reports `ProbeTimeout` instead of a late success. WinUI keeps its 90 s
-  correlation timeout.
+  registers it before the REST call, requires the ack to echo it exactly
+  (missing/malformed/mismatched ids are protocol errors), rejects malformed
+  metadata and stale `probe_result`/`error` events, and owns a 75 s post-ack
+  watchdog. The engine enforces a cooperative 60 s absolute deadline from
+  command acceptance (including executor queue wait); a late success, falsey
+  result, exception, or bot-check all report `ProbeTimeout`. WinUI keeps its
+  90 s correlation timeout and the server UUID fallback.
 
 ## In Progress
 

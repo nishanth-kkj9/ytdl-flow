@@ -13,7 +13,13 @@ import { useDownloadStore } from "./downloadStore";
 describe("downloadStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    invoke.mockResolvedValue({});
+    // The probe contract requires the ack to echo the submitted id exactly;
+    // default to a compliant server so unrelated tests stay focused.
+    invoke.mockImplementation(async (command: string, payload?: unknown) =>
+      command === "probe_url"
+        ? { id: (payload as { id?: string } | undefined)?.id }
+        : {},
+    );
     // Reset store to a clean initial state between tests.
     useDownloadStore.setState({
       queue: [],
@@ -181,7 +187,7 @@ describe("downloadStore", () => {
 
   it("probeUrl sets probeInFlight and the 75s watchdog clears it (F-11/N-09)", async () => {
     vi.useFakeTimers();
-    invoke.mockResolvedValueOnce({});
+    invoke.mockImplementationOnce(async (_command: string, payload: { id: string }) => ({ id: payload.id }));
     const p = useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
     await p;
     expect(useDownloadStore.getState().probeInFlight).toBe(true);
@@ -214,6 +220,35 @@ describe("downloadStore", () => {
     expect(useDownloadStore.getState().probeRequestId).toBe(pendingId);
   });
 
+  it("never arms a watchdog when the result lands before the ack (N-09)", async () => {
+    vi.useFakeTimers();
+    let resolveAck!: (value: unknown) => void;
+    invoke.mockReturnValueOnce(new Promise((resolve) => {
+      resolveAck = resolve;
+    }));
+
+    const p = useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
+    const pendingId = useDownloadStore.getState().probeRequestId!;
+
+    // The WS result arrived first: the hook clears the watchdog and finishes
+    // the request while the REST ack is still in flight.
+    useDownloadStore.getState().clearProbeTimeout(pendingId);
+    useDownloadStore.setState({ probeInFlight: false, probeRequestId: null });
+
+    resolveAck({ id: pendingId });
+    await p;
+
+    const s = useDownloadStore.getState();
+    expect(s.probeInFlight).toBe(false);
+    expect(s.probeRequestId).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+    // A completed request is not a "stale" anomaly — no warn-level noise.
+    expect(
+      s.logs.some((l) => l.level === "warn" && l.message.includes("stale probe_url ack")),
+    ).toBe(false);
+    vi.useRealTimers();
+  });
+
   it("arms the watchdog only after the REST ack (N-09)", async () => {
     vi.useFakeTimers();
     let resolveAck!: (value: unknown) => void;
@@ -224,30 +259,51 @@ describe("downloadStore", () => {
     const p = useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
     expect(vi.getTimerCount()).toBe(0);
 
-    resolveAck({});
+    const pendingId = useDownloadStore.getState().probeRequestId;
+    resolveAck({ id: pendingId });
     await p;
     expect(vi.getTimerCount()).toBe(1);
     vi.useRealTimers();
   });
 
-  it("adopts the server-echoed id when it differs (N-09)", async () => {
+  it("rejects a mismatched ack id instead of adopting it (N-09)", async () => {
     vi.useFakeTimers();
     invoke.mockResolvedValueOnce({ id: "server-probe-1" });
 
     await useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
-    expect(useDownloadStore.getState().probeRequestId).toBe("server-probe-1");
 
-    // A clear for the pre-ack id must not disarm the adopted request.
-    useDownloadStore.getState().clearProbeTimeout("client-probe-1");
-    expect(vi.getTimerCount()).toBe(1);
-    useDownloadStore.getState().clearProbeTimeout("server-probe-1");
+    const s = useDownloadStore.getState();
+    expect(s.probeRequestId).toBeNull();
+    expect(s.probeInFlight).toBe(false);
+    expect(s.probeError).toContain("acknowledged");
+    expect(s.statusMessage).toBe("Probe failed.");
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ["missing", {}],
+    ["empty", { id: "" }],
+    ["non-string", { id: 42 }],
+    ["malformed", { id: "bad id!" }],
+    ["primitive", "not-an-object"],
+  ])("rejects a %s ack id as a protocol error (N-09)", async (_label, ack) => {
+    vi.useFakeTimers();
+    invoke.mockResolvedValueOnce(ack);
+
+    await useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
+
+    const s = useDownloadStore.getState();
+    expect(s.probeRequestId).toBeNull();
+    expect(s.probeInFlight).toBe(false);
+    expect(s.probeError).toContain("acknowledged");
     expect(vi.getTimerCount()).toBe(0);
     vi.useRealTimers();
   });
 
   it("probeUrl clears stale watchdog timers when a probe finishes or is replaced", async () => {
     vi.useFakeTimers();
-    invoke.mockResolvedValue({});
+    invoke.mockImplementation(async (_command: string, payload: { id: string }) => ({ id: payload.id }));
 
     await useDownloadStore.getState().probeUrl("https://youtu.be/one");
     expect(vi.getTimerCount()).toBe(1);
@@ -266,20 +322,20 @@ describe("downloadStore", () => {
 
   it("ignores a clear for an id that does not own the watchdog (N-09)", async () => {
     vi.useFakeTimers();
-    invoke.mockResolvedValueOnce({ id: "current" });
 
     await useDownloadStore.getState().probeUrl("https://youtu.be/one");
+    const currentId = useDownloadStore.getState().probeRequestId;
     useDownloadStore.getState().clearProbeTimeout("old-request");
 
     expect(vi.getTimerCount()).toBe(1);
-    expect(useDownloadStore.getState().probeRequestId).toBe("current");
+    expect(useDownloadStore.getState().probeRequestId).toBe(currentId);
     expect(useDownloadStore.getState().probeInFlight).toBe(true);
     vi.useRealTimers();
   });
 
   it("replacing a probe owns the single watchdog (N-09)", async () => {
     vi.useFakeTimers();
-    invoke.mockResolvedValue({});
+    invoke.mockImplementation(async (_command: string, payload: { id: string }) => ({ id: payload.id }));
 
     await useDownloadStore.getState().probeUrl("https://youtu.be/one");
     const firstId = useDownloadStore.getState().probeRequestId;
@@ -313,7 +369,7 @@ describe("downloadStore", () => {
     }));
     const oldProbe = useDownloadStore.getState().probeUrl("https://youtu.be/old");
 
-    invoke.mockResolvedValueOnce({});
+    invoke.mockImplementationOnce(async (_command: string, payload: { id: string }) => ({ id: payload.id }));
     await useDownloadStore.getState().probeUrl("https://youtu.be/new");
     const currentId = useDownloadStore.getState().probeRequestId;
 
@@ -326,5 +382,28 @@ describe("downloadStore", () => {
     expect(s.probeError).toBeNull();
     expect(s.statusMessage).not.toBe("Probe failed.");
     useDownloadStore.getState().clearProbeTimeout();
+  });
+
+  it("ignores a stale ack that resolves after a newer probe started (N-09)", async () => {
+    vi.useFakeTimers();
+    let resolveOld!: (value: unknown) => void;
+    invoke.mockReturnValueOnce(new Promise((resolve) => {
+      resolveOld = resolve;
+    }));
+    const oldProbe = useDownloadStore.getState().probeUrl("https://youtu.be/old");
+    const oldId = useDownloadStore.getState().probeRequestId;
+
+    await useDownloadStore.getState().probeUrl("https://youtu.be/new");
+    const newId = useDownloadStore.getState().probeRequestId;
+    expect(newId).not.toBe(oldId);
+
+    resolveOld({ id: oldId });
+    await oldProbe;
+
+    const s = useDownloadStore.getState();
+    expect(s.probeRequestId).toBe(newId);
+    expect(s.probeInFlight).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.useRealTimers();
   });
 });

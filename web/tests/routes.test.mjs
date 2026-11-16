@@ -132,6 +132,24 @@ function request(app, method, path, body) {
   console.log("✓ probe: omitted id -> generated + forwarded");
 }
 
+// Test 3d: present-but-empty / non-string id is malformed, not "omitted"
+{
+  const engine = makeEngine();
+  const app = makeApp(probeRouter(engine));
+  const empty = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    id: "",
+  });
+  assert.strictEqual(empty.status, 400, "Empty id must not silently get a UUID");
+  const numeric = await request(app, "POST", "/", {
+    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    id: 42,
+  });
+  assert.strictEqual(numeric.status, 400, "Non-string id must be rejected");
+  assert.strictEqual(engine.sent.length, 0, "No command should be sent");
+  console.log("✓ probe: empty/non-string id -> 400");
+}
+
 // ── Download route ───────────────────────────────────────────────────────────
 
 // Test 4: missing url -> 400

@@ -1748,6 +1748,18 @@ class AudioDownloadEngine:
         if deadline is None:
             deadline = probe_started + 60.0
         timed_out = False
+
+        def _backoff(attempt: int) -> bool:
+            """Sleep before the next attempt, capped by the deadline.
+
+            Returns True when the budget is already spent (caller must stop).
+            """
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return True
+            time.sleep(min(1.5 * (attempt + 1), remaining))
+            return False
+
         for attempt in range(3):
             # Absolute deadline: never start an attempt the caller has already
             # given up on (including a worker that waited in the executor queue).
@@ -1757,39 +1769,65 @@ class AudioDownloadEngine:
             try:
                 with YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
-                if info:
-                    # A success that lands past the deadline is stale by
-                    # contract — report timeout instead of a late success.
+
+                if not info:
+                    # A falsey extraction is a failed attempt, not a success
+                    # with missing fields — surface an actionable error if
+                    # every attempt returns nothing. Still respect the deadline.
+                    if not last_err:
+                        last_err = (
+                            "Probe returned no info; verify network, yt-dlp, "
+                            "and URL compatibility."
+                        )
                     if time.monotonic() >= deadline:
                         timed_out = True
                         break
-                    applog.log_probe(
-                        url,
-                        info.get("title", "?"),
-                        float(info.get("duration") or 0),
-                        info.get("uploader", "?"),
-                    )
-                    return info, ""
+                    # Same capped back-off as the exception path: never hammer a
+                    # block-prone URL with back-to-back extractions.
+                    if attempt < 2 and _backoff(attempt):
+                        timed_out = True
+                        break
+                    continue
+
+                # A success that lands past the deadline is stale by contract —
+                # report timeout instead of a late success.
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
+                applog.log_probe(
+                    url,
+                    info.get("title", "?"),
+                    float(info.get("duration") or 0),
+                    info.get("uploader", "?"),
+                )
+                return info, ""
             except Exception as exc:
-                last_err = str(exc)
+                # A message-less exception must never surface as an empty error
+                # (the falsey branch above already guarantees a usable string).
+                last_err = str(exc) or type(exc).__name__
                 applog.warn(f"Probe attempt {attempt + 1} failed: {last_err[:120]}")
+                # F-11: deadline — once the budget is spent, report now instead
+                # of looping through the remaining attempts. Checked before the
+                # bot-detection break so a late bot-check is still a timeout.
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    break
                 # BOT-FIX: same fail-fast as downloads — retrying into an
                 # active bot-check only hardens the block.
                 if is_bot_detection_error(last_err):
                     break
-                # F-11: deadline — once the budget is spent, report now instead
-                # of looping through the remaining attempts.
-                if time.monotonic() >= deadline:
-                    timed_out = True
-                    break
                 if attempt < 2:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
+                    if _backoff(attempt):
                         timed_out = True
                         break
-                    time.sleep(min(1.5 * (attempt + 1), remaining))
 
         if timed_out:
+            # Preserve a bot-check classification so the IPC layer can latch
+            # the breaker from the ORIGINAL error before it relabels this as a
+            # ProbeTimeout — a late bot-check must still trip cooldown.
+            if is_bot_detection_error(last_err):
+                applog.log_probe_error(url, "BotDetectionError", last_err)
+                return None, f"{last_err}\n\n{bot_fix_hint()}"
             timeout_msg = "Probe timed out after 60s."
             applog.log_probe_error(url, "ProbeTimeout", timeout_msg)
             return None, timeout_msg

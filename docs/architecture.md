@@ -36,11 +36,11 @@ sequenceDiagram
     UI->>API: POST /api/probe (YouTube URL + client request id)
     API->>API: validate URL allowlist + id, rate limit
     API->>Eng: probe request (NDJSON, same id)
-    Eng->>YT: metadata extraction (60 s absolute deadline)
+    Eng->>YT: metadata extraction (cooperative 60 s deadline from acceptance)
     YT-->>Eng: title, duration, formats, thumbnail
     Eng-->>API: ProbeResult (same id)
     API-->>UI: 200 { id }
-    API-->>UI: WebSocket probe_result (metadata; UI ignores non-matching ids)
+    API-->>UI: WebSocket probe_result (metadata; UI requires exact id + valid info)
     UI->>API: POST /api/download (format, quality, trim)
     API->>Mgr: enqueue job (worker pool, max 5)
     Mgr->>Eng: download request (NDJSON)
@@ -53,6 +53,18 @@ sequenceDiagram
     Mgr-->>API: job complete → history persisted
     API-->>UI: WS status + history snapshot
 ```
+
+### Probe timeout contract
+
+- The engine budget starts when the IPC command is accepted, including any wait
+  in the probe executor queue.
+- The engine deadline is **cooperative**: it bounds when work is started and
+  when a result is accepted, but a blocking yt-dlp call cannot be interrupted
+  mid-flight. If yt-dlp returns after the deadline, the outcome (success,
+  empty result, exception, or bot-check) is reported as `ProbeTimeout`.
+- The browser's watchdog starts only after a matching REST acknowledgement and
+  fires at 75 s. WinUI keeps its own 90 s request-correlated timeout; the
+  server generates a UUID only when a caller (WinUI or legacy) omits the id.
 
 ## Frontend (`src/`)
 
