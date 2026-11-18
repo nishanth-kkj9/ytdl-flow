@@ -21,15 +21,14 @@ export function probeRouter(engineManager) {
     // The browser generates the probe id and registers it BEFORE the REST
     // call, so a fast probe_result can never arrive before the request is
     // known locally. Echo the same id back and forward it to the engine.
-    // Only an OMITTED id gets a server-generated one (WinUI/legacy clients);
-    // empty or non-string ids are malformed, not "missing".
+    // Only an ABSENT id gets a server-generated one (WinUI/legacy clients).
+    // An explicit `null`, empty string, or any non-string value is malformed:
+    // never coerce it, never invent an id for it.
     const rawId = req.body?.id;
-    const id =
-      rawId === undefined || rawId === null
-        ? randomUUID()
-        : typeof rawId === "string"
-          ? rawId
-          : "";
+    if (rawId !== undefined && typeof rawId !== "string") {
+      return res.status(400).json({ error: "Invalid id: must be 1-128 chars of [A-Za-z0-9_-:]" });
+    }
+    const id = rawId === undefined ? randomUUID() : rawId;
     if (!/^[\w\-:]{1,128}$/.test(id)) {
       return res.status(400).json({ error: "Invalid id: must be 1-128 chars of [A-Za-z0-9_-:]" });
     }

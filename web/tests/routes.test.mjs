@@ -132,22 +132,39 @@ function request(app, method, path, body) {
   console.log("✓ probe: omitted id -> generated + forwarded");
 }
 
-// Test 3d: present-but-empty / non-string id is malformed, not "omitted"
+// Test 3d: present-but-malformed id is rejected, never treated as "omitted"
 {
   const engine = makeEngine();
   const app = makeApp(probeRouter(engine));
-  const empty = await request(app, "POST", "/", {
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    id: "",
-  });
-  assert.strictEqual(empty.status, 400, "Empty id must not silently get a UUID");
-  const numeric = await request(app, "POST", "/", {
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    id: 42,
-  });
-  assert.strictEqual(numeric.status, 400, "Non-string id must be rejected");
-  assert.strictEqual(engine.sent.length, 0, "No command should be sent");
-  console.log("✓ probe: empty/non-string id -> 400");
+  const url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+  const malformed = [
+    ["empty string", ""],
+    ["explicit null", null],
+    ["number", 42],
+    ["boolean", true],
+    ["object", { nested: true }],
+    ["array", ["id"]],
+  ];
+  for (const [label, id] of malformed) {
+    const res = await request(app, "POST", "/", { url, id });
+    assert.strictEqual(res.status, 400, `${label} id must be 400`);
+    assert.ok(res.body && typeof res.body.error === "string", `${label} id must return { error }`);
+    assert.strictEqual(engine.sent.length, 0, `${label} id must not reach the engine`);
+  }
+  // Boundary: 128 chars accepted, 129 rejected.
+  const boundary = "a".repeat(128);
+  const ok = await request(app, "POST", "/", { url, id: boundary });
+  assert.strictEqual(ok.status, 200, "128-char id must be accepted");
+  assert.strictEqual(ok.body.id, boundary, "128-char id must be echoed");
+  const tooLong = await request(app, "POST", "/", { url, id: `${boundary}a` });
+  assert.strictEqual(tooLong.status, 400, "129-char id must be rejected");
+  assert.strictEqual(engine.sent.length, 1, "only the accepted id reaches the engine");
+  // URL validation must run before id validation.
+  const order = await request(app, "POST", "/", { url: "https://example.com/x", id: 42 });
+  assert.strictEqual(order.status, 400, "invalid url must be 400");
+  assert.match(String(order.body.error), /url|YouTube/i, "url error must win over the id error");
+  assert.strictEqual(engine.sent.length, 1, "no command for the invalid url");
+  console.log("✓ probe: malformed ids (empty/null/number/boolean/object/array) -> 400");
 }
 
 // ── Download route ───────────────────────────────────────────────────────────

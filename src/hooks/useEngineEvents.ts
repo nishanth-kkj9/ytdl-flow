@@ -3,6 +3,74 @@ import { listen, invoke, onReconnect, onConnectionChange, type UnlistenFn } from
 import { useDownloadStore } from "../stores/downloadStore";
 import { FormatInfo } from "../types";
 
+// N-09: probe metadata arrives from yt-dlp over NDJSON — trust nothing.
+// Rules derived from a real probe (53 formats): `format_id` and `ext` are
+// always strings ("sb3", "139-drc" / "m4a", "mp4", "webm"); numeric fields
+// arrive as JSON numbers or null. Malformed entries are dropped, never
+// repaired by string coercion.
+function isValidFormatId(value: unknown): value is string {
+  if (typeof value !== "string" || value.trim() === "") return false;
+  // Count code points, not UTF-16 units: 64 characters is 64 characters.
+  if (Array.from(value).length > 64) return false;
+  // Control, format, and line/paragraph separator characters would corrupt
+  // logs and rendered text (bidi overrides can even reverse it).
+  return !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value);
+}
+
+function isValidExt(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9]{1,16}$/.test(value);
+}
+
+function toNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value : undefined;
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function parseFormatEntry(raw: unknown): FormatInfo | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const fmt = raw as Record<string, unknown>;
+  // A genuine format needs both identifiers; `ext` alone is not enough.
+  if (!isValidFormatId(fmt.format_id) || !isValidExt(fmt.ext)) return null;
+  const vcodec = toNonEmptyString(fmt.vcodec);
+  const acodec = toNonEmptyString(fmt.acodec);
+  return {
+    format_id: fmt.format_id,
+    ext: fmt.ext,
+    resolution: toNonEmptyString(fmt.resolution),
+    filesize: toFiniteNumber(fmt.filesize),
+    fps: toFiniteNumber(fmt.fps),
+    vcodec: vcodec && vcodec !== "none" ? vcodec : undefined,
+    acodec: acodec && acodec !== "none" ? acodec : undefined,
+    abr: toFiniteNumber(fmt.abr),
+    vbr: toFiniteNumber(fmt.vbr),
+    tbr: toFiniteNumber(fmt.tbr),
+    channels: toFiniteNumber(fmt.channels),
+    audio_sample_rate: toFiniteNumber(fmt.audio_sample_rate),
+  };
+}
+
+function parseFormats(raw: unknown): FormatInfo[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(parseFormatEntry).filter((f): f is FormatInfo => f !== null);
+}
+
+// A probe result must carry usable metadata: a real title, a real URL, or
+// at least one genuine format. Empty/null/array/string payloads and formats
+// made only of malformed entries are protocol errors.
+function isUsableProbeInfo(info: unknown): info is Record<string, unknown> {
+  if (!info || typeof info !== "object" || Array.isArray(info)) return false;
+  const record = info as Record<string, unknown>;
+  const hasTitle = toNonEmptyString(record.title) !== undefined;
+  const hasUrl = toNonEmptyString(record.webpage_url) !== undefined;
+  const hasFormats =
+    Array.isArray(record.formats) &&
+    record.formats.some((f) => parseFormatEntry(f) !== null);
+  return hasTitle || hasUrl || hasFormats;
+}
+
 export function useEngineEvents() {
   const updateQueueItem = useDownloadStore((state) => state.updateQueueItem);
   const addHistoryItem = useDownloadStore((state) => state.addHistoryItem);
@@ -21,54 +89,6 @@ export function useEngineEvents() {
   // twice in quick succession — each pass invokes get_active_jobs, and a
   // later pass could mark items the earlier pass had just decided about.
   const reconcileInFlight = useRef(false);
-
-  // N-09: a probe result must carry a real metadata object. Empty, null,
-  // array, or string payloads are protocol errors, not "unknown title" probes.
-  function isUsableProbeInfo(info: unknown): info is Record<string, unknown> {
-    if (!info || typeof info !== "object" || Array.isArray(info)) return false;
-    const record = info as Record<string, unknown>;
-    const hasTitle = typeof record.title === "string" && record.title.trim() !== "";
-    const hasUrl = typeof record.webpage_url === "string" && record.webpage_url.trim() !== "";
-    // Formats only count as usable when they are real entries with an
-    // identifier; an empty list is allowed alongside a title/url but cannot
-    // carry a probe by itself.
-    const hasFormats =
-      Array.isArray(record.formats) &&
-      record.formats.some(
-        (f) =>
-          !!f &&
-          typeof f === "object" &&
-          !Array.isArray(f) &&
-          (String((f as Record<string, unknown>).format_id ?? "").trim() !== "" ||
-            String((f as Record<string, unknown>).ext ?? "").trim() !== "")
-      );
-    return hasTitle || hasUrl || hasFormats;
-  }
-
-  function parseFormats(raw: unknown): FormatInfo[] {
-    if (!Array.isArray(raw)) return [];
-    return raw
-      // A single malformed entry must not abort parsing after the watchdog was
-      // already disarmed — drop it instead of dereferencing null.
-      .filter((f: unknown) => !!f && typeof f === "object")
-      .map((f: unknown) => {
-        const fmt = f as Record<string, unknown>;
-        return {
-          format_id: String(fmt.format_id ?? ""),
-          ext: String(fmt.ext ?? ""),
-          resolution: fmt.resolution != null ? String(fmt.resolution) : undefined,
-          filesize: fmt.filesize != null ? Number(fmt.filesize) : undefined,
-          fps: fmt.fps != null ? Number(fmt.fps) : undefined,
-          vcodec: fmt.vcodec && String(fmt.vcodec) !== "none" ? String(fmt.vcodec) : undefined,
-          acodec: fmt.acodec && String(fmt.acodec) !== "none" ? String(fmt.acodec) : undefined,
-          abr: fmt.abr != null ? Number(fmt.abr) : undefined,
-          vbr: fmt.vbr != null ? Number(fmt.vbr) : undefined,
-          tbr: fmt.tbr != null ? Number(fmt.tbr) : undefined,
-          channels: fmt.channels != null ? Number(fmt.channels) : undefined,
-          audio_sample_rate: fmt.audio_sample_rate != null ? Number(fmt.audio_sample_rate) : undefined,
-        };
-      });
-  }
 
   useEffect(() => {
     // P1-9: StrictMode mounts → cleanup → mounts again. The subscriptions are

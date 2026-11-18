@@ -373,6 +373,17 @@ describe("useEngineEvents — status message flow", () => {
     ["malformed format entry", { formats: [null] }],
     ["formats without identifiers", { formats: [{}] }],
     ["empty object with empty formats", { formats: [] }],
+    ["formats with numeric format_id", { formats: [{ format_id: 251, ext: "webm" }] }],
+    ["formats with object format_id", { formats: [{ format_id: {}, ext: "webm" }] }],
+    ["formats with boolean ext", { formats: [{ format_id: "251", ext: true }] }],
+    ["formats with empty format_id", { formats: [{ format_id: "", ext: "webm" }] }],
+    ["formats with empty ext", { formats: [{ format_id: "251", ext: "" }] }],
+    ["formats with ext only", { formats: [{ ext: "webm" }] }],
+    ["formats with array entry", { formats: [["251", "webm"]] }],
+    ["nested formats array", { formats: [[{ format_id: "251", ext: "webm" }]] }],
+    ["formats with NUL in format_id", { formats: [{ format_id: "251\u0000", ext: "webm" }] }],
+    ["formats with bidi override in format_id", { formats: [{ format_id: "251\u202e4", ext: "webm" }] }],
+    ["formats with overlong format_id", { formats: [{ format_id: "a".repeat(65), ext: "webm" }] }],
   ])("rejects malformed probe metadata: %s (N-09)", async (_label, info) => {
     await setup();
     useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
@@ -458,6 +469,108 @@ describe("useEngineEvents — status message flow", () => {
     expect(s.probeInfo?.formats?.[0]?.format_id).toBe("251");
     expect(s.probeError).toBeNull();
     expect(s.probeInFlight).toBe(false);
+  });
+
+  it("keeps only genuine formats and never coerces numbers (N-09)", async () => {
+    await setup();
+    useDownloadStore.setState({ probeRequestId: "p1", probeInFlight: true });
+    emit("probe_result", {
+      type: "probe_result",
+      id: "p1",
+      success: true,
+      info: {
+        title: "T",
+        formats: [
+          // Valid ids, but only finite numbers survive for optional fields.
+          { format_id: "251", ext: "webm", filesize: Number.NaN, fps: Infinity, abr: "128" },
+          { format_id: 251, ext: "webm" },
+          { format_id: "140", ext: "M4A" },
+          { format_id: "", ext: "webm" },
+          { format_id: "139", ext: "mp4", filesize: 1234, fps: 30, abr: 128 },
+          // 64 code points is the cap, and 64 must still be accepted.
+          { format_id: "a".repeat(64), ext: "webm" },
+          null,
+          ["251", "webm"],
+        ],
+      },
+    });
+
+    const formats = useDownloadStore.getState().probeInfo?.formats;
+    expect(formats?.map((f) => f.format_id)).toEqual(["251", "139", "a".repeat(64)]);
+    expect(formats?.[0]).toMatchObject({
+      format_id: "251",
+      ext: "webm",
+      filesize: undefined,
+      fps: undefined,
+      abr: undefined,
+    });
+    expect(formats?.[0]?.filesize).not.toBeNaN();
+    expect(formats?.[1]).toMatchObject({ format_id: "139", filesize: 1234, fps: 30, abr: 128 });
+    expect(useDownloadStore.getState().probeError).toBeNull();
+  });
+
+  it("rejects a stale malformed result without touching the active probe watchdog (N-09)", async () => {
+    await setup();
+    vi.useFakeTimers();
+    try {
+      vi.mocked(invoke).mockImplementationOnce(
+        async (_command: string, args?: Record<string, unknown>) => ({
+          id: (args as { id?: string } | undefined)?.id,
+        }),
+      );
+      await useDownloadStore.getState().probeUrl("https://youtu.be/aaaa");
+      const activeId = useDownloadStore.getState().probeRequestId;
+      expect(activeId).toBeTruthy();
+      expect(vi.getTimerCount()).toBe(1);
+
+      emit("probe_result", {
+        type: "probe_result",
+        id: "stale",
+        success: true,
+        info: { formats: [{ format_id: 5, ext: "webm" }] },
+      });
+
+      const s = useDownloadStore.getState();
+      expect(s.probeRequestId).toBe(activeId);
+      expect(s.probeInFlight).toBe(true);
+      expect(s.probeError).toBeNull();
+      expect(vi.getTimerCount()).toBe(1);
+    } finally {
+      useDownloadStore.getState().clearProbeTimeout();
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the request-owned watchdog when the matching result is malformed (N-09)", async () => {
+    await setup();
+    vi.useFakeTimers();
+    try {
+      vi.mocked(invoke).mockImplementationOnce(
+        async (_command: string, args?: Record<string, unknown>) => ({
+          id: (args as { id?: string } | undefined)?.id,
+        }),
+      );
+      await useDownloadStore.getState().probeUrl("https://youtu.be/bbbb");
+      const activeId = useDownloadStore.getState().probeRequestId;
+      expect(activeId).toBeTruthy();
+      expect(vi.getTimerCount()).toBe(1);
+
+      emit("probe_result", {
+        type: "probe_result",
+        id: activeId,
+        success: true,
+        info: { formats: [{ format_id: {}, ext: "webm" }] },
+      });
+
+      const s = useDownloadStore.getState();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(s.probeInFlight).toBe(false);
+      expect(s.probeRequestId).toBeNull();
+      expect(s.probeError).toBe("Probe returned invalid metadata.");
+    } finally {
+      useDownloadStore.getState().clearProbeTimeout();
+      vi.useRealTimers();
+    }
   });
 
   it("disarms the request-owned watchdog on a matching result (N-09)", async () => {

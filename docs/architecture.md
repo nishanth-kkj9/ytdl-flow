@@ -64,7 +64,14 @@ sequenceDiagram
   empty result, exception, or bot-check) is reported as `ProbeTimeout`.
 - The browser's watchdog starts only after a matching REST acknowledgement and
   fires at 75 s. WinUI keeps its own 90 s request-correlated timeout; the
-  server generates a UUID only when a caller (WinUI or legacy) omits the id.
+  server generates a UUID only when a caller (WinUI or legacy) omits the id
+  entirely. An explicit `null`, empty string, or non-string id is a 400 and
+  never reaches the engine.
+- Probe metadata is validated before it is shown: a format needs a genuine
+  string `format_id` and a lowercase alphanumeric `ext`, optional numeric
+  format fields must be JSON numbers and finite, and a result must carry a
+  title, a URL, or at least one genuine format. Malformed entries are dropped,
+  never repaired.
 
 ## Frontend (`src/`)
 
